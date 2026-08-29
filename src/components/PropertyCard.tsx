@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { memo, useState } from "react";
 import type { Card } from "@/lib/p2/types";
 import {
   ATTRIBUTE_LABEL,
@@ -31,7 +31,7 @@ import { RatingChip, ScoreDetails, SignalBadge } from "./signals";
  * reasons (null = no evaluado → se omite), atributos solo si vienen, procedencia
  * visible. Nada se recalcula: display directo de lo que manda P2/P3.
  */
-export default function PropertyCard({
+function PropertyCardBase({
   card,
   similar = false,
 }: {
@@ -161,3 +161,9 @@ export default function PropertyCard({
     </article>
   );
 }
+
+/**
+ * Memoizada: mientras el resumen de la búsqueda llega por streaming, el padre
+ * re-renderiza en cada frame. Sin esto se rearmaban las 20 cards cada vez.
+ */
+export default memo(PropertyCardBase);

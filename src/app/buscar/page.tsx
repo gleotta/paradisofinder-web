@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import ConversationView from "@/components/ConversationView";
+import SearchResultsView from "@/components/SearchResultsView";
 
 export const metadata: Metadata = {
   title: "Resultados",
@@ -8,8 +8,9 @@ export const metadata: Metadata = {
 };
 
 /**
- * Pantalla 2 — Resultados. La vista es conversacional y vive en el cliente
- * (la primera consulta va por /api/search; los refinamientos por SSE).
+ * Pantalla 2 — Resultados: búsqueda simple + mapa (cambio de producto 29/08,
+ * ver `docs/DECISION_2026-08-29_busqueda-simple.md`). Vive en el cliente porque
+ * el scroll infinito y el mapa son interactivos.
  * Suspense: useSearchParams lo exige en el prerender.
  */
 export default function BuscarPage() {
@@ -24,7 +25,7 @@ export default function BuscarPage() {
           </div>
         }
       >
-        <ConversationView />
+        <SearchResultsView />
       </Suspense>
     </main>
   );

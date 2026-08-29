@@ -346,9 +346,51 @@ img {
 /* ============================== Resultados ============================== */
 
 .results-page {
-  padding-top: 28px;
-  /* deja aire para el dock anclado */
-  padding-bottom: 220px;
+  padding-top: 20px;
+  padding-bottom: 64px;
+}
+
+/* Barra de búsqueda de la vista de resultados (búsqueda simple, 29/08):
+   siempre visible arriba de la lista para lanzar otra consulta. */
+.searchbar-row {
+  position: sticky;
+  top: calc(var(--header-h) + 8px);
+  z-index: 30;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+  padding: 6px 6px 6px 20px;
+  margin-bottom: 18px;
+}
+
+.searchbar-row:focus-within {
+  border-color: var(--purple);
+  box-shadow: var(--shadow-hover);
+}
+
+.searchbar-row input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-family: var(--body);
+  font-size: 15.5px;
+  color: var(--ink);
+  padding: 8px 0;
+}
+
+.searchbar-row input::placeholder {
+  color: #a394b1;
+}
+
+.searchbar-row .btn {
+  flex: none;
+  padding: 9px 20px;
 }
 
 .results-head {
@@ -386,6 +428,57 @@ img {
 .pill--note {
   background: var(--pastel-4);
   color: #8c2c55;
+}
+
+/* Resumen en prosa que manda P2 por streaming (no es un chat: es el texto
+   de la búsqueda, arriba del listado). */
+.summary {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--magenta);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin-top: 16px;
+}
+
+.summary-label {
+  display: block;
+  font-size: 11.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.summary p {
+  margin: 0;
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+.caret {
+  display: inline-block;
+  width: 7px;
+  height: 15px;
+  background: var(--magenta);
+  vertical-align: text-bottom;
+  margin-left: 2px;
+  animation: blink 0.9s steps(1) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Chips de acción (clarificación y suggestions de P2) */
+.msg-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .cards-grid {
@@ -795,180 +888,6 @@ details.score summary .why {
   to {
     transform: rotate(360deg);
   }
-}
-
-/* ============================== Chat dock ============================== */
-
-.dock-wrap {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 50;
-  pointer-events: none;
-  padding: 0 20px;
-}
-
-.dock {
-  pointer-events: auto;
-  max-width: 860px;
-  margin: 0 auto;
-  background: var(--white);
-  border: 1px solid var(--line);
-  border-bottom: 0;
-  border-radius: 18px 18px 0 0;
-  box-shadow: 0 -8px 30px rgba(58, 15, 98, 0.16);
-  overflow: hidden;
-}
-
-/* Barra de colapso del historial — solo existe en mobile */
-.dock-toggle {
-  display: none;
-  width: 100%;
-  border: 0;
-  background: var(--white);
-  padding: 6px 16px 6px;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  color: var(--purple);
-  font-size: 13px;
-  font-weight: 600;
-  font-family: var(--body);
-}
-
-.dock-grabber {
-  width: 42px;
-  height: 4px;
-  border-radius: 999px;
-  background: var(--line);
-}
-
-.dock-toggle-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.dock-count {
-  background: var(--pastel-2);
-  color: var(--purple-deep);
-  border-radius: 999px;
-  padding: 0 8px;
-  font-size: 11.5px;
-  line-height: 18px;
-}
-
-.dock-log {
-  max-height: 38vh;
-  overflow-y: auto;
-  padding: 14px 18px 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.msg {
-  max-width: 85%;
-  border-radius: 14px;
-  padding: 9px 14px;
-  font-size: 14.5px;
-  line-height: 1.5;
-}
-
-.msg--user {
-  align-self: flex-end;
-  background: var(--purple);
-  color: var(--white);
-  border-bottom-right-radius: 4px;
-}
-
-.msg--assistant {
-  align-self: flex-start;
-  background: var(--lilac);
-  color: var(--ink);
-  border-bottom-left-radius: 4px;
-}
-
-.msg--system {
-  align-self: center;
-  color: var(--muted);
-  font-size: 13px;
-  font-style: italic;
-  background: transparent;
-  padding: 2px 8px;
-}
-
-.msg--error {
-  align-self: flex-start;
-  background: var(--sig-red-bg);
-  color: var(--sig-red-ink);
-}
-
-.msg--error button {
-  margin-left: 8px;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font-weight: 700;
-  text-decoration: underline;
-  padding: 0;
-}
-
-.msg .caret {
-  display: inline-block;
-  width: 7px;
-  height: 15px;
-  background: var(--magenta);
-  vertical-align: text-bottom;
-  margin-left: 2px;
-  animation: blink 0.9s steps(1) infinite;
-}
-
-@keyframes blink {
-  50% {
-    opacity: 0;
-  }
-}
-
-.msg-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 9px;
-}
-
-.dock-form {
-  display: flex;
-  gap: 8px;
-  /* safe-area: que el input no quede pegado al home indicator del iPhone */
-  padding: 12px 14px calc(14px + env(safe-area-inset-bottom, 0px));
-  border-top: 1px solid var(--line);
-  background: var(--white);
-}
-
-.dock-form input {
-  flex: 1;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 11px 18px;
-  font-size: 15px;
-  font-family: var(--body);
-  color: var(--ink);
-  outline: none;
-  min-width: 0;
-}
-
-.dock-form input:focus {
-  border-color: var(--purple);
-}
-
-.dock-hint {
-  text-align: center;
-  color: var(--muted);
-  font-size: 11.5px;
-  padding: 0 14px 8px;
-  background: var(--white);
 }
 
 /* ============================== Detalle ============================== */
@@ -1415,7 +1334,7 @@ details.score summary .why {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: calc(118px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
   z-index: 66;
   border: 0;
   background: var(--ink);
@@ -1605,10 +1524,6 @@ details.score summary .why {
     height: calc(100vh - var(--header-h));
   }
 
-  /* el chat anclado queda sobre la columna de lista, no sobre el mapa */
-  .has-map .dock-wrap {
-    right: var(--map-w);
-  }
 }
 
 /* --- Mobile/tablet (<1024): overlay fullscreen --- */
@@ -1638,7 +1553,6 @@ details.score summary .why {
 
   .map-overlay-open .map-fab {
     z-index: 80;
-    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
   }
 }
 
@@ -1745,51 +1659,25 @@ details.score summary .why {
     padding: 20px;
   }
 
-  /* --- dock colapsable: en reposo solo barra + input --- */
-  .dock-wrap {
-    padding: 0;
+  .searchbar-row {
+    padding: 8px;
+    border-radius: 18px;
+    gap: 6px;
   }
 
-  .dock {
-    max-width: none;
-    border-radius: 16px 16px 0 0;
-    box-shadow: 0 -6px 24px rgba(58, 15, 98, 0.2);
+  .searchbar-row input {
+    /* iOS hace zoom al enfocar inputs de menos de 16px */
+    font-size: 16px;
+    padding: 6px 10px;
   }
 
-  .dock-toggle {
-    display: flex;
+  .searchbar-row .btn {
+    padding: 9px 16px;
   }
 
-  .dock:not(.dock--open) .dock-log {
-    display: none;
-  }
-
-  .dock-log {
-    max-height: 46vh;
-    padding: 6px 14px;
-  }
-
-  .msg {
-    font-size: 14px;
-    max-width: 92%;
-  }
-
-  .dock-form {
-    padding-top: 10px;
-    border-top: 0;
-  }
-
-  .dock--open .dock-form {
-    border-top: 1px solid var(--line);
-  }
-
-  /* la enseñanza del hint vive en el placeholder; acá solo roba pantalla */
-  .dock-hint {
-    display: none;
-  }
-
+  /* el FAB del mapa flota abajo: aire para que no tape la última card */
   .results-page {
-    padding-bottom: 150px;
+    padding-bottom: 90px;
   }
 
   /* --- detalle --- */
