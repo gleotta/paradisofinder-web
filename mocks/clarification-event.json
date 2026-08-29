@@ -1,0 +1,9 @@
+{
+  "_nota": "Ejemplo ILUSTRATIVO del event: clarification del canal SSE (spec §3) y del caso clarification_needed en /search/text. Renderizar como pregunta con chips, nunca como error.",
+  "session_id": "b7e2d4f0-0000-4000-8000-ejemploejem",
+  "message": "¿Qué estás buscando? Puedo mostrarte propiedades para comprar, para alquilar o para invertir.",
+  "chips": ["Comprar", "Alquilar", "Invertir"],
+  "clarification_reason": "sin_senal",
+  "nivel1_required": true,
+  "context": {}
+}
