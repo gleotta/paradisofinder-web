@@ -1541,7 +1541,8 @@ details.score summary .why {
     display: block;
     position: fixed;
     inset: 0;
-    top: 54px;
+    /* Arranca justo debajo del header real (64px; 54px en ≤760px vía la var). */
+    top: var(--header-h);
     z-index: 70;
     width: auto;
     height: auto;
@@ -1572,6 +1573,11 @@ details.score summary .why {
 
 @media (max-width: 760px) {
   /* --- header compacto, sin quiebre del tag --- */
+  /* La var acompaña la altura real: la usan la searchbar sticky y el overlay del mapa. */
+  :root {
+    --header-h: 54px;
+  }
+
   .site-header .container {
     height: 54px;
     gap: 10px;
