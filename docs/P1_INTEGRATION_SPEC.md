@@ -9,6 +9,16 @@ schemas reales) y `SPECS.md`.
 **Mercado activo:** `san_juan` (es-AR). Todos los endpoints con prefijo
 `/api/v1/`.
 
+**Última actualización:** 2026-08-30. Si venías integrando con una versión
+anterior, empezá por **`CAMBIOS_P2_PARA_P1_2026-08-30.md`** (delta + checklist
+de migración). Cambios del 29-30/08 — `POST /search/map` implementado
+(§2, cierra el hueco §4.1 del handoff) y **paginación unificada**: los
+resultados son siempre estructurados y paginados en los tres endpoints; las
+`related` (embeddings, máx 10) llegan solo en la última página.
+⚠️ **Cambios incompatibles (2026-08-29)** — ver §5b:
+`complemento` → `related` (nuevo shape) y las últimas claves en
+castellano/italiano migradas al contrato inglés.
+
 ---
 
 ## 0. Topología y autenticación (decisión 2026-08-26: topología A)
@@ -32,6 +42,7 @@ schemas reales) y `SPECS.md`.
 | Modo | Endpoints | Estado |
 |---|---|---|
 | **Búsqueda del portal** (barra de búsqueda, sin conversación) | `POST /search/text` + `POST /search/structured` (scroll) + `POST /search/semantic` | STATELESS — sin sesión |
+| **Mapa** (los dos modos) | `POST /search/map` — criterio estructurado *o* `session_id` | Stateless o con sesión, según la forma |
 | **Conversacional** (chat con refinamientos) | `POST /sessions` + `POST /search/stream` (SSE) o `POST /search` (sync fallback) | Con sesión: el estado se ACUMULA turno a turno en P2 |
 
 ---
@@ -39,27 +50,110 @@ schemas reales) y `SPECS.md`.
 ## 2. Búsqueda del portal (stateless)
 
 ### POST /search/text
-Input: `{ query, limit? (default 20), modo? ("hibrido" default) }`
+Input: `{ query, limit? (default 20), offset? (default 0), modo? ("hibrido") }`
 Output: `{ covered, clarification_needed, extraction: {params, meta},
 result: {total, total_matches, citta, params_applied, cards[]},
-complemento: {motivo, faltantes, agregadas, cards[]} | null }`
+related: {reason, count, cards[]} | null }`
 
 - `clarification_needed=true` → `result=null`: mostrar chips
   **[Comprar] [Alquilar] [Invertir]** y reintentar la MISMA query
   anteponiendo la elección (o pasar al flujo conversacional).
-- `complemento.cards` = "similares" que NO cumplen los filtros duros:
+- `related.cards` = "similares" que NO cumplen los filtros duros:
   renderizar SEPARADAS y marcadas como similares.
 - `total_matches` = total real en DB; `total` = cards devueltas.
 
-### Scroll infinito
-1. Página 1: `/search/text` → guardar `extraction.params` (es un body
-   válido de `/search/structured`).
-2. Páginas siguientes: `POST /search/structured` con esos params +
-   `offset` (20, 40, …; máx 10000) y `limit`. Orden determinístico
-   (desempate por `id`) → sin solapes. ~20-90 ms, sin LLM.
-3. Agotado `total_matches`: seguir con `POST /search/semantic`
-   `{query, offset}` para más "similares" — dedup por ids ya vistos
-   DEL LADO DE P1.
+### Scroll infinito — RESULTADOS estructurados, RELATED por embeddings
+
+**Regla de oro (2026-08-29):** los resultados salen SIEMPRE de la búsqueda
+estructurada y se paginan; las "relacionadas" salen de embeddings y llegan
+SOLO cuando lo estructurado se agotó.
+
+1. Página 1: `POST /search/text` `{query, limit, offset: 0}`.
+2. Páginas siguientes: **el mismo** `/search/text` con `offset` (20, 40, …;
+   máx 10000). Orden determinístico (desempate por `id`) → sin solapes.
+   *(También sirve `/search/structured` con `extraction.params` + `offset`
+   si P1 prefiere no repetir la extracción: es el mismo SQL.)*
+3. **Última página**: cuando `offset + result.total >= total_matches`, la
+   respuesta trae además `related` — hasta **10** cards por embeddings.
+   P1 ya no tiene que llamar a `/search/semantic` ni deduplicar: viene
+   resuelto y deduplicado contra lo ya mostrado.
+
+En las páginas intermedias `related` es `null`. No hay que pedirlo ni
+paginarlo: es el cierre del scroll, no una sección paralela.
+
+### POST /search/map — el mapa (2026-08-29)
+Devuelve **TODOS** los pins del criterio, no la página rankeada. Cierra el
+hueco §4.1 del handoff: el mapa armado con `/search/structured` +
+`limit=100` dibujaba ~79 puntos de ~300.
+
+**Es un servicio delgado y NO conversacional, a propósito.** No interpreta
+lenguaje, no llama al LLM y no modifica ninguna sesión: recibe criterio ya
+resuelto y devuelve coordenadas. Todo lo que sea entender al usuario pasa
+antes, por `/search/text` o por el chat. No esperes que crezca: si el mapa
+necesita algo nuevo, casi siempre se resuelve mandándole otro criterio.
+
+Dos formas **mutuamente excluyentes** (mandar las dos → 422):
+
+```jsonc
+// (a) criterio estructurado — el MISMO vocabulario de /search/structured.
+//     P1 lo alimenta con extraction.params (portal).
+{ "vertical": "sale", "zones": ["capital"], "property_type": "apartment",
+  "currency": "USD", "area_min_sqm": 100,
+  "filters": [ { "field": "pool", "operator": "eq", "value": true } ] }
+
+// (b) sesión conversacional — P2 resuelve el estado acumulado del chat.
+{ "session_id": "b7e2d4f0-…" }
+```
+
+Sin `limit`/`offset` (devuelve el universo), sin `order` (un mapa no tiene
+ranking) y sin texto libre (cero LLM: la extracción vive en `/search/text`
+y en el chat). Mandar cualquiera de esos da **422** en vez de ignorarse: si
+se ignoraran en silencio, P1 creería que pagina y recibiría todo sin
+enterarse.
+
+```jsonc
+{ "total_matches": 421,   // avisos del criterio en DB — el MISMO valor que
+                          // /search/text y /search/structured ("N de M")
+  "total_pins": 333,      // subconjunto mapeable — SIEMPRE == pins.length
+  "citta": "san_juan",
+  "params_applied": { "vertical": "sale", "zones": ["capital"], … },
+  "pins": [
+    { "id": "008c82aa-…", "latitude": -31.5336557, "longitude": -68.5182953,
+      "price": 100000,        // SIEMPRE el original del aviso
+      "currency": "USD",      // USD | ARS
+      "price_usd": 100000.0,  // única base comparable entre monedas
+      "rental_period": null,  // day | week | month — sin esto un precio de
+                              // alquiler no es interpretable (regla dura #5)
+      "property_type": "apartment", "operation": "sale" }
+  ] }
+```
+
+Reglas de comportamiento:
+
+1. **Sin tope y sin paginación.** `pins.length == total_pins` siempre.
+2. **Gate del mapa server-side:** `quality_tier >= 2` + coordenadas. No es
+   calidad, es ubicación: medido en la DB real, el tier 2 tiene coordenadas
+   en el **100%** de los avisos y el tier 1 en el **0%**. P1 no recibe jamás
+   un pin sin dónde ponerse — no hace falta que filtre.
+3. **`total_matches` usa el gate del LISTADO** (tier >= 1) para que "N de M
+   en el mapa" cierre con el contador del listado. `total_pins <= total_matches`.
+4. Orden determinístico por `id` (respuestas estables y cacheables).
+5. **Payload mínimo a propósito:** el popup de un pin pide el detalle a
+   `GET /property/{id}`. Sin `content_language`: no viaja texto de P3.
+6. Sesión inexistente/expirada → **404** (P1 recrea sesión); sesión que
+   todavía no buscó nada → **422** (no se devuelve el mercado entero).
+7. Fast-path puro (SQL). Medido en la instancia de prueba: **p95 38 ms** en
+   el peor caso absoluto del mercado (todo en venta, 1.824 pins, 374 KB).
+   Bucket de rate limit de búsqueda (30/min).
+
+Medido el 2026-08-29 contra la DB real (los totales se mueven con cada
+corrida de P3):
+
+| criterio | `total_matches` | `total_pins` | antes (página de 100) |
+|---|---|---|---|
+| deptos en venta en capital | 421 | 333 | 79 |
+| casas en venta en rawson | 189 | 139 | 73 |
+| alquileres en capital | 271 | 206 | 74 |
 
 ---
 
@@ -68,6 +162,31 @@ complemento: {motivo, faltantes, agregadas, cards[]} | null }`
 ### POST /sessions → `{ session_id, created_at, expires_at }` (TTL 24 h)
 `GET /sessions/{id}` para reconexión. Sesión expirada → crear una nueva
 (el contexto se pierde: aceptado por diseño).
+
+El mapa del chat sale de `POST /search/map` con `{session_id}` (forma (b)
+de §2): usa el criterio acumulado tal como lo dejó el último turno, sin que
+P1 tenga que reenviar `context.search_params`.
+
+### Paginación del chat (2026-08-29) — NO es un turno
+
+`POST /search` y `POST /search/stream` aceptan `limit` (default 20) y
+`offset`. Para pedir la página siguiente se manda **sin `query`**:
+
+```jsonc
+{ "session_id": "b7e2d4f0-…", "offset": 20 }
+```
+
+Eso re-consulta el criterio ya acumulado y **no cuenta como turno**: no
+llama al LLM, no mergea, no toca el estado ni el historial (`message_count`
+y `turns` no se mueven). Medido: **14-21 ms** contra los ~2-3 s de un turno
+con narrativa.
+
+- En SSE, una paginación emite `cards` → `done` **sin `response_chunk`**: la
+  narrativa describe el efecto de un turno, y paginar no es uno.
+- `related` (hasta 10, por embeddings) llega en la **última página**, igual
+  que en el portal.
+- Un request sin `query`, sin `vertical_override` y sin `offset` → **422**.
+  Paginar una sesión que todavía no buscó nada → **422**.
 
 ### POST /search/stream — SSE
 Request: `{ session_id, query, vertical_override? }`
@@ -88,11 +207,11 @@ Request: `{ session_id, query, vertical_override? }`
     "total_resultados": 142        // = total_matches REAL en DB
   },
   "nivel1_required": false,
-  "total": 20,                     // cards en este payload
-  "total_matches": 142,            // total real en DB
-  "complemento": { "motivo": "resultados_insuficientes",
-                   "faltantes": 12, "agregadas": 12,
-                   "cards": [ /* similares — render separado */ ] }, // |null
+  "total": 20,                     // cards en este payload (= limit pedido)
+  "total_matches": 142,            // total real en DB — paginar con offset
+  "related": { "reason": "structured_exhausted", "count": 10,
+               "cards": [ /* similares — render separado */ ] },  // |null:
+                          // solo en la ÚLTIMA página, máx 10
   "suggestions": ["Ampliar la zona", "Ajustar el presupuesto"],      // |null (con 0 resultados)
   "content_language": "es-AR"      // idioma de los TEXTOS de P3 (las claves son inglés)
 }
@@ -144,7 +263,7 @@ contexto acumulado.
 ### POST /search (sync)
 Mismo request; devuelve todo junto: `{ session_id, riepilogo, cards,
 nivel1_required, chips, suggestions, llm_response (texto template),
-context, complemento }`. Fallback sin SSE; NO trae narrativa LLM.
+context, related }`. Fallback sin SSE; NO trae narrativa LLM.
 
 ---
 
@@ -194,17 +313,37 @@ nivel de respuesta. El schema completo está en `/docs` (Swagger).
 | `quality_tier`, `quality_score` | tier 0 no se muestra; **mapa solo con `quality_tier >= 2`** |
 | `zone`, `address`, `latitude`, `longitude` | Ubicación |
 | `comparables_count`, `zone_supply`, `valuation_gap_pct`, `price_percentile`, `estimated_monthly_rent`, `rent_to_price_ratio` | Indicadores de mercado (P3) |
-| `relevance_score` | En cards de `complemento`/semántica: score de similitud |
+| `relevance_score` | En cards de `related`/semántica: score de similitud |
 
-### Reglas de producto que cambian lo que el usuario ve (28/08)
+### Reglas de producto que cambian lo que el usuario ve
 
-- **"para alquilar" es SIEMPRE un inquilino** (regla de mercado AR/San Juan).
-  "depto para alquilar en pocito", "casa para alquilar a una pareja" → busca
-  ALQUILERES. El inversor lo dice explícito: "comprar/invertir para alquilar",
-  "para después alquilar", "para renta". Prompt `ar-1.8.4`.
-- **El dúplex se trata como departamento** (`property_type: "apartment"`).
-  P3 tipifica 45 de 59 así. Pidiendo dúplex explícitamente, los que declaran
-  serlo salen primero y detrás siguen el resto de los departamentos.
+Son reglas FIJAS: no se re-discuten por caso. Prompt `ar-1.9.1`.
+
+**Verticales — tres de las cuatro intenciones son COMPRAS** (28/08, cerrada
+el 29/08). Se resuelve en dos pasos, en orden:
+
+1. **¿Hay verbo de compra?** (comprar / invertir / adquirir / "en venta") →
+   es COMPRA, punto. El verbo MANDA sobre lo que venga después:
+   *"comprar depto para alquiler profesional"* es una compra, no un alquiler.
+   Lo que sigue describe el uso y va a `semantic_query`.
+2. **Sin verbo de compra**: **"renta"** ("para renta", "que deje renta") y
+   **"reventa"** significan COMPRAR para invertir — **nunca alquilar**.
+   Cualquier otro "alquilar/alquiler" es un INQUILINO, siempre:
+   *"depto para alquilar en pocito"*, *"casa para alquilar a una pareja"*,
+   *"depto para alquiler profesional"*.
+
+Si un usuario se queja de "busqué para alquilar y me mostró alquileres", la
+respuesta es: está bien.
+
+**Dúplex — preferencia, nunca filtro** (28/08, implementación corregida el
+30/08). Quien busca DEPARTAMENTO ve los dúplex; quien busca DÚPLEX ve
+primero los que lo son y detrás los departamentos. Llega como
+`property_type: null` + `preferred_property_type: "apartment"` +
+`semantic_query: "dúplex"`.
+
+*Por qué no es un filtro:* P3 no tipifica el dúplex — de los 60 avisos que
+lo dicen, 14 quedaron como `house`. Filtrar duro por `apartment` los
+excluía (en Rawson, al único dúplex que existe).
 
 ### Qué NO debe hacer P1 (reglas duras)
 1. NO recalcular indicadores ni umbrales (todo viene precomputado).
@@ -234,7 +373,8 @@ Los nombres anteriores siguen aceptándose como alias de transición.
 |---|---|
 | `vertical` | `sale` · `rent` · `investment` · **`temporary_rent`** |
 | `zones` | nombres de `master.zones` |
-| `property_type` | `house`, `apartment`, `land`, … (los de la card) |
+| `property_type` | `house`, `apartment`, `land`, … (los de la card) — filtro DURO |
+| `preferred_property_type` | mismo vocabulario. Preferencia **BLANDA**: ordena, NO filtra. Sirve para **cualquier** categoría que P3 no tipifique — hoy es el dúplex (ver reglas de producto), mañana puede ser otra: el campo NO desaparece cuando P3 tipifique el dúplex. ⚠️ **P1 tiene que propagarla al paginar**: si se pierde, la página 2 cambia de ranking |
 | `currency` | `USD` \| `ARS` (AR) · `EUR` (IT) |
 | `area_min_sqm` | m² mínimos |
 | `filters[]` | `{field, operator, value}` — `field` = nombre de la card (`pool`, `parking`, `condition`, `price_usd`, `gross_yield_pct`…) |
@@ -242,6 +382,9 @@ Los nombres anteriores siguen aceptándose como alias de transición.
 
 `extraction.params` de `/search/text` viene en este vocabulario y sigue
 siendo un body válido de `/search/structured` (mecanismo de scroll).
+**Reenviarlo COMPLETO**, sin filtrar campos que P1 no reconozca: perder
+`preferred_property_type` o `semantic_query` cambia el orden de la página
+siguiente (medido: el ranking difiere desde la posición 2).
 
 ### Alquiler temporario y habitaciones (P3 handoff 27/08)
 
@@ -268,17 +411,54 @@ en la capa de borde de P2 (`app/models/value_maps.py`). El request se migró en 
 mismo día (pase 2, arriba): acepta el vocabulario público y los nombres
 anteriores como alias.
 
+## 5b. Migración de claves al contrato inglés (2026-08-29)
+
+La migración de agosto había cubierto la **Card**, pero no el sobre de las
+respuestas conversacionales. Se completó. Renombres, **solo de nombres — los
+valores y el comportamiento no cambian**:
+
+| antes | ahora | dónde |
+|---|---|---|
+| `riepilogo` | `summary` | `/search`, evento `cards` del SSE |
+| `riepilogo.zona` | `summary.zone` | idem |
+| `riepilogo.tipo` | `summary.property_type` | idem |
+| `riepilogo.orden` | `summary.order` | idem |
+| `riepilogo.nota_asuncion` | `summary.assumption_note` | idem |
+| `riepilogo.total_resultados` | `summary.total_results` | idem |
+| `context.zona` | `context.zones` | `/search`, evento `done` |
+| `context.tipo` | `context.property_type` | idem |
+| `context.orden` | `context.order` | idem |
+| `context.superficie_min` | `context.area_min_sqm` | idem |
+| `citta` | `market` | `/search/structured`, `/search/semantic`, `/search/map` |
+| `complemento` | `related` (shape nuevo) | todos |
+
+**Bug de canal corregido de paso:** el evento SSE armaba su payload sin los
+alias, así que el MISMO dato salía como `campo/operador/valor` por
+`/search/stream` y como `field/operator/value` por `/search`. Ahora los dos
+canales emiten idéntico.
+
+**Lo que NO cambió:** `context.search_params` sigue con el vocabulario
+interno (`zonas`, `tipo`, `moneda`, `orden`) — es el estado acumulado del
+motor, no contrato de nombres. `/search/map` y `/search/structured` lo
+aceptan igual (tienen alias de entrada).
+
+**Cómo se validó:** caracterización diferencial de 24 escenarios
+(`tests/migration_snapshot/`) — captura completa de todos los endpoints antes
+y después; la única diferencia admitida es el mapa de renombres de arriba.
+El arnés se autovalida primero (dos capturas sin tocar código deben dar
+idénticas) para descartar ruido.
+
 ## 6. Errores (todos los endpoints)
 
 | Código | Significado | Acción P1 |
 |---|---|---|
 | 401 | API key faltante/mala | Config del server P1 |
 | 404 | Sesión inexistente/expirada | Crear sesión nueva y reintentar |
-| 422 | Params inválidos (detalle en `detail`) | Bug: loguear |
+| 422 | Params inválidos (detalle en `detail`); en `/search/map`, también las dos formas juntas o una sesión sin criterio | Bug: loguear |
 | 429 | Rate limit | Backoff |
 | 501 | Mercado no soportado | No debería ocurrir (san_juan) |
 | 502 | Fallo del LLM (mensaje explícito) | Mostrar error + retry |
-| 503 | LLM no configurado / sin cotización USD-ARS | Mostrar error |
+| 503 | LLM no configurado / sin cotización USD-ARS / universo del mapa sobre `MAP_MAX_PINS` | Mostrar error |
 | 500 | Error interno (sanitizado) | Genérico + retry |
 
 En SSE los errores llegan como `event: error` (el HTTP ya es 200).
@@ -290,9 +470,12 @@ En SSE los errores llegan como `event: error` (el HTTP ya es 200).
 - **I1 — Portal**: `/search/text` + scroll (`/search/structured` +
   `/search/semantic`) + render de Card §5 + clarificación con chips.
 - **I2 — Chat SSE**: sesión + `/search/stream` (cards → typing de
-  narrativa → done) + chips + reset + complemento separado.
+  narrativa → done) + chips + reset + related separado + paginación.
 - **I3 — Detalle**: `/property/{id}` con semáforos, score explicado y
   comparables.
+- **I4 — Mapa**: `/search/map` (forma (a) en el portal, forma (b) en el
+  chat) — una sola llamada, sin filtrar del lado de P1 y sin aviso de
+  parcialidad: ya viene el universo completo.
 
 Instancia de prueba de P2: puerto 8001 local (la 8000 es del usuario).
 Swagger: `http://localhost:8001/docs`.

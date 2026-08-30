@@ -13,7 +13,6 @@ import type {
   Card,
   CardsEvent,
   ClarificationEvent,
-  Complemento,
   MapPin,
   MapSearchRequest,
   MapSearchResponse,
@@ -21,13 +20,13 @@ import type {
   PropertyDetail,
   PropertyDetailResponse,
   RatingColor,
-  Riepilogo,
+  Related,
   SearchTextResponse,
   SessionResponse,
   StreamRequest,
   StructuredParams,
   StructuredResponse,
-  SearchResult,
+  Summary,
 } from "./types";
 
 const BASE_CARDS = (baseSearch as { result: { cards: unknown } }).result
@@ -432,15 +431,18 @@ function toParams(intent: MockIntent, limit: number): StructuredParams {
 
 const ZERO_SUGGESTIONS = ["Ampliar la zona", "Ajustar el presupuesto", "Probar en Capital o Rawson"];
 
-function buildComplemento(intent: MockIntent, faltantes: number): Complemento | null {
-  if (faltantes <= 0) return null;
-  const agregadas = Math.min(3, faltantes);
+/** ¿Esta página agota el criterio? Solo entonces viaja `related` (spec §2). */
+function isLastPage(offset: number, pageLen: number, total_matches: number): boolean {
+  return offset + pageLen >= total_matches;
+}
+
+/** Relacionadas por embeddings (máx 10): SOLO en la última página del criterio. */
+function buildRelated(intent: MockIntent): Related {
   const cards: Card[] = [];
-  for (let i = 0; i < agregadas; i++) {
-    const c = mockCard(60 + i, "x", { zones: [], tipo: intent.tipo });
-    cards.push(c);
+  for (let i = 0; i < 3; i++) {
+    cards.push(mockCard(60 + i, "x", { zones: [], tipo: intent.tipo }));
   }
-  return { motivo: "resultados_insuficientes", faltantes, agregadas, cards };
+  return { reason: "structured_exhausted", count: cards.length, cards };
 }
 
 /* ------------------------------------------------------------------ */
@@ -449,7 +451,7 @@ function buildComplemento(intent: MockIntent, faltantes: number): Complemento | 
 
 const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
-export async function mockSearchText(query: string, limit = 10): Promise<SearchTextResponse> {
+export async function mockSearchText(query: string, limit = 10, offset = 0): Promise<SearchTextResponse> {
   await sleep(250);
   const intent = interpretQuery(query);
 
@@ -459,13 +461,13 @@ export async function mockSearchText(query: string, limit = 10): Promise<SearchT
       clarification_needed: true,
       extraction: null,
       result: null,
-      complemento: null,
+      related: null,
       message: (baseClarification as { message: string }).message,
       chips: (baseClarification as { chips: string[] }).chips,
     };
   }
 
-  const params = toParams(intent, limit);
+  const params = { ...toParams(intent, limit), offset };
   if (intent.deadZone) {
     return {
       covered: true,
@@ -474,12 +476,13 @@ export async function mockSearchText(query: string, limit = 10): Promise<SearchT
       result: {
         total: 0,
         total_matches: 0,
-        citta: "san_juan",
+        market: "san_juan",
         params_applied: { vertical: intent.vertical, zones: [titleCase(intent.deadZone)] },
         cards: [],
         suggestions: ZERO_SUGGESTIONS,
       },
-      complemento: null,
+      // Cero también es "última página": las relacionadas son el "Podrían interesarte".
+      related: buildRelated(intent),
     };
   }
 
@@ -491,7 +494,7 @@ export async function mockSearchText(query: string, limit = 10): Promise<SearchT
     result: {
       total: cards.length,
       total_matches,
-      citta: "san_juan",
+      market: "san_juan",
       params_applied: {
         vertical: intent.vertical,
         ...(intent.zones.length ? { zones: intent.zones } : {}),
@@ -501,7 +504,7 @@ export async function mockSearchText(query: string, limit = 10): Promise<SearchT
       cards,
       suggestions: total_matches === 0 ? ZERO_SUGGESTIONS : null,
     },
-    complemento: total_matches > 0 && total_matches < limit ? buildComplemento(intent, limit - total_matches) : null,
+    related: isLastPage(offset, cards.length, total_matches) ? buildRelated(intent) : null,
   };
 }
 
@@ -511,25 +514,8 @@ export async function mockSearchStructured(params: StructuredParams): Promise<St
   return {
     total: cards.length,
     total_matches,
-    citta: "san_juan",
+    market: "san_juan",
     params_applied: params as Record<string, unknown>,
-    cards,
-  };
-}
-
-export async function mockSearchSemantic(query: string, offset = 0, limit = 10): Promise<SearchResult> {
-  await sleep(120);
-  const intent = interpretQuery(query);
-  const TOTAL_SIMILAR = 12;
-  const cards: Card[] = [];
-  for (let i = offset; i < Math.min(offset + limit, TOTAL_SIMILAR); i++) {
-    cards.push(mockCard(80 + i, "x", { zones: [], tipo: intent.tipo }));
-  }
-  return {
-    total: cards.length,
-    total_matches: TOTAL_SIMILAR,
-    citta: "san_juan",
-    params_applied: { query },
     cards,
   };
 }
@@ -567,7 +553,7 @@ export async function mockSearchMap(body: MapSearchRequest): Promise<MapSearchRe
   return {
     total_matches,
     total_pins: pins.length,
-    citta: "san_juan",
+    market: "san_juan",
     params_applied: { ...body },
     pins,
   };
@@ -608,15 +594,15 @@ const TIPO_LABEL: Record<string, string> = {
   room: "Habitación",
 };
 
-function buildRiepilogo(intent: MockIntent, total: number): Riepilogo {
+function buildSummary(intent: MockIntent, total: number): Summary {
   return {
     vertical: VERTICAL_LABEL[intent.vertical],
-    zona: intent.deadZone ? titleCase(intent.deadZone) : intent.zones.length ? intent.zones.join(", ") : "Toda la provincia",
-    tipo: intent.tipo ? TIPO_LABEL[intent.tipo] : null,
+    zone: intent.deadZone ? titleCase(intent.deadZone) : intent.zones.length ? intent.zones.join(", ") : "Toda la provincia",
+    property_type: intent.tipo ? TIPO_LABEL[intent.tipo] : null,
     budget: intent.budget,
-    orden: ORDER_LABEL[intent.order],
-    nota_asuncion: intent.assumedSale ? "Asumí compra — decime si buscás alquilar" : null,
-    total_resultados: total,
+    order: ORDER_LABEL[intent.order],
+    assumption_note: intent.assumedSale ? "Asumí compra — decime si buscás alquilar" : null,
+    total_results: total,
   };
 }
 
@@ -645,17 +631,76 @@ function sseChunk(event: string, data: unknown): Uint8Array {
   return new TextEncoder().encode(`event: ${event}\r\ndata: ${JSON.stringify(data)}\r\n\r\n`);
 }
 
+function sseResponse(stream: ReadableStream<Uint8Array>): Response {
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+    },
+  });
+}
+
+/**
+ * Estado acumulado por sesión, como en P2 real: la paginación
+ * `{session_id, offset}` no trae query, así que el criterio sale de acá.
+ */
+const SESSION_INTENT = new Map<string, MockIntent>();
+
+function buildCardsEvent(sessionId: string, intent: MockIntent, offset: number, limit: number): CardsEvent {
+  const total_matches = totalFor(intent.vertical, intent.zones, intent.deadZone);
+  const params = { ...toParams(intent, limit), offset };
+  const cards = intent.deadZone ? [] : pageCards(params).cards;
+  return {
+    session_id: sessionId,
+    cards,
+    summary: buildSummary(intent, total_matches),
+    nivel1_required: false,
+    total: cards.length,
+    total_matches,
+    related: isLastPage(offset, cards.length, total_matches) ? buildRelated(intent) : null,
+    suggestions: total_matches === 0 ? ZERO_SUGGESTIONS : null,
+    content_language: "es-AR",
+  };
+}
+
 /**
  * Mock del canal SSE POST /search/stream — respeta el orden de eventos del contrato:
  * cards → response_chunk(×N) → done | clarification | error.
+ * Paginación (sin `query`): cards → done, sin narrativa — no es un turno.
  */
 export function mockSearchStream(body: StreamRequest): Response {
-  const intent = interpretQuery(body.query, body.vertical_override);
+  const query = body.query?.trim();
+
+  if (!query) {
+    const intent = SESSION_INTENT.get(body.session_id);
+    if (typeof body.offset !== "number") {
+      return Response.json({ detail: "query, vertical_override u offset requeridos" }, { status: 422 });
+    }
+    if (!intent) {
+      return Response.json({ detail: "La sesión todavía no buscó nada" }, { status: 422 });
+    }
+    const cardsEvent = buildCardsEvent(body.session_id, intent, body.offset, body.limit ?? 20);
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        await sleep(18); // P2 real: 14-21 ms, sin LLM
+        controller.enqueue(sseChunk("cards", cardsEvent));
+        controller.enqueue(sseChunk("done", { context: {}, meta: { latency_ms: { search: 12, total: 18 } } }));
+        controller.close();
+      },
+    });
+    return sseResponse(stream);
+  }
+
+  const intent = interpretQuery(query, body.vertical_override);
+  const limit = body.limit ?? 20;
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
         if (intent.reset) {
+          SESSION_INTENT.delete(body.session_id);
           await sleep(200);
           const ev: ClarificationEvent = {
             session_id: body.session_id,
@@ -685,27 +730,15 @@ export function mockSearchStream(body: StreamRequest): Response {
           return;
         }
 
-        const params = toParams(intent, 20);
-        const total_matches = totalFor(intent.vertical, intent.zones, intent.deadZone);
-        const { cards } = intent.deadZone ? { cards: [] as Card[] } : pageCards(params);
+        if (SESSION_INTENT.size > 200) SESSION_INTENT.clear();
+        SESSION_INTENT.set(body.session_id, intent);
 
         await sleep(150);
-        const cardsEvent: CardsEvent = {
-          session_id: body.session_id,
-          cards,
-          riepilogo: buildRiepilogo(intent, total_matches),
-          nivel1_required: false,
-          total: cards.length,
-          total_matches,
-          complemento:
-            total_matches > 0 && total_matches < 10 ? buildComplemento(intent, 10 - total_matches) : null,
-          suggestions: total_matches === 0 ? ZERO_SUGGESTIONS : null,
-          content_language: "es-AR",
-        };
+        const cardsEvent = buildCardsEvent(body.session_id, intent, 0, limit);
         controller.enqueue(sseChunk("cards", cardsEvent));
 
         // Narrativa con "typing": un token por palabra, como el LLM real.
-        const narrative = buildNarrative(intent, total_matches, cards.length);
+        const narrative = buildNarrative(intent, cardsEvent.total_matches, cardsEvent.cards.length);
         const tokens = narrative.split(/(?<=\s)/);
         await sleep(500);
         for (const token of tokens) {
@@ -715,7 +748,7 @@ export function mockSearchStream(body: StreamRequest): Response {
 
         controller.enqueue(
           sseChunk("done", {
-            context: { search_params: params },
+            context: { search_params: toParams(intent, limit) },
             meta: {
               extractor: body.vertical_override ? "override" : "fast",
               narrativa: "template",
@@ -731,14 +764,7 @@ export function mockSearchStream(body: StreamRequest): Response {
     },
   });
 
-  return new Response(stream, {
-    status: 200,
-    headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-    },
-  });
+  return sseResponse(stream);
 }
 
 /* --------------------------- Detalle -------------------------------- */

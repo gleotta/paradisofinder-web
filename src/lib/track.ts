@@ -13,7 +13,7 @@ export const EVENTS = {
   CLARIFICATION_CHIP: "clarification_chip_selected",
   OPPORTUNITY_CHIP: "opportunity_chip_toggled",
   PAGE_LOADED: "results_page_loaded",
-  COMPLEMENT_SHOWN: "complement_shown",
+  RELATED_SHOWN: "related_shown",
   DETAIL_OPENED: "property_detail_opened",
   CONTACT_CLICK: "contact_click",
   SOURCE_CLICK: "source_click",

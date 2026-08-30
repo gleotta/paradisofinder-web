@@ -1,10 +1,11 @@
 /**
- * Tipos del contrato P2 → P1 según docs/P1_INTEGRATION_SPEC.md (2026-08-26).
+ * Tipos del contrato P2 → P1 según docs/P1_INTEGRATION_SPEC.md (2026-08-30).
  * La fuente de verdad es el Swagger vivo de P2 (`http://localhost:8001/docs`) y la
  * colección Postman; ante diferencia, ganan Swagger/Postman.
  *
- * Contrato internacional (2026-08-27): claves y códigos en inglés; los TEXTOS libres
- * vienen localizados por P3 (`content_language`, acá "es-AR") y se muestran tal cual.
+ * Contrato internacional (2026-08-27; completado el 29/08 — spec §5b): claves y
+ * códigos en inglés; los TEXTOS libres vienen localizados por P3
+ * (`content_language`, acá "es-AR") y se muestran tal cual.
  */
 
 export type Operation = "sale" | "rent";
@@ -190,7 +191,7 @@ export interface Card {
   private_bathroom?: boolean | null;
   room_class?: RoomClass | null;
 
-  /** En cards de complemento/semántica: score de similitud. */
+  /** En cards de `related`: score de similitud. */
   relevance_score?: number | null;
 }
 
@@ -234,7 +235,15 @@ export interface StructuredFilter {
 export interface StructuredParams {
   vertical?: "sale" | "rent" | "investment" | "temporary_rent";
   zones?: string[];
+  /** Filtro DURO. */
   property_type?: PropertyType;
+  /**
+   * Preferencia BLANDA: ordena, NO filtra (hoy la usa el dúplex; spec §5).
+   * Al paginar hay que reenviarla — perderla cambia el ranking de la página 2.
+   */
+  preferred_property_type?: PropertyType;
+  /** Texto libre residual de la extracción; también pesa en el ranking. */
+  semantic_query?: string;
   currency?: Currency;
   area_min_sqm?: number;
   filters?: StructuredFilter[];
@@ -253,10 +262,15 @@ export interface StructuredParams {
   [key: string]: unknown;
 }
 
-export interface Complemento {
-  motivo: string;
-  faltantes: number | null;
-  agregadas: number | null;
+/**
+ * "Relacionadas" por embeddings (ex `complemento`, renombrado el 29/08).
+ * Llegan SOLO en la última página del criterio (máx 10), ya deduplicadas
+ * contra lo mostrado; en páginas intermedias el campo es null.
+ */
+export interface Related {
+  /** Hoy: "structured_exhausted". */
+  reason: string;
+  count: number;
   cards: Card[];
 }
 
@@ -265,7 +279,7 @@ export interface SearchResult {
   total: number;
   /** Total real en DB — el contador de resultados usa ESTE. */
   total_matches: number;
-  citta: string;
+  market: string;
   params_applied: Record<string, unknown> | null;
   cards: Card[];
   suggestions?: string[] | null;
@@ -281,7 +295,8 @@ export interface SearchTextResponse {
     meta: Record<string, unknown> | null;
   } | null;
   result: SearchResult | null;
-  complemento: Complemento | null;
+  /** Solo en la última página del criterio. */
+  related: Related | null;
   /** Presentes cuando clarification_needed=true (chips fijos de la spec si faltan). */
   message?: string | null;
   chips?: string[] | null;
@@ -333,7 +348,7 @@ export interface MapSearchResponse {
   total_matches: number;
   /** Subconjunto mapeable (tier >= 2 con coordenadas). Siempre == pins.length. */
   total_pins: number;
-  citta: string;
+  market: string;
   params_applied: Record<string, unknown>;
   pins: MapPin[];
 }
@@ -366,12 +381,6 @@ export function toMapRequest(params: StructuredParams): MapSearchRequest {
   return out;
 }
 
-export interface SemanticRequest {
-  query: string;
-  offset?: number;
-  limit?: number;
-}
-
 /* ------------------------------------------------------------------ */
 /* Conversacional (SSE) — spec §3                                      */
 /* ------------------------------------------------------------------ */
@@ -382,34 +391,47 @@ export interface SessionResponse {
   expires_at: string;
 }
 
+/**
+ * Dos formas (spec §3):
+ *  - Turno: `{session_id, query, vertical_override?}` — pasa por el LLM.
+ *  - Paginación (2026-08-29): `{session_id, offset, limit?}` SIN `query` —
+ *    re-consulta el criterio acumulado, no cuenta como turno (14-21 ms) y el
+ *    SSE emite `cards` → `done` sin `response_chunk`.
+ */
 export interface StreamRequest {
   session_id: string;
-  query: string;
+  query?: string;
   /** "comprar" | "alquilar" | "invertir" (chips de clarificación). */
   vertical_override?: string;
+  /** Default 20. */
+  limit?: number;
+  offset?: number;
 }
 
-export interface Riepilogo {
+/** Ex `riepilogo` (renombrado el 29/08 — spec §5b). Textos ya localizados por P2. */
+export interface Summary {
   vertical: string | null;
-  zona: string | null;
-  tipo: string | null;
+  zone: string | null;
+  property_type: string | null;
   budget: string | null;
-  orden: string | null;
-  nota_asuncion: string | null;
+  order: string | null;
+  assumption_note: string | null;
   /** = total_matches REAL en DB. */
-  total_resultados: number;
+  total_results: number;
 }
 
 export interface CardsEvent {
   session_id: string;
   cards: Card[];
-  riepilogo: Riepilogo;
+  summary: Summary;
   nivel1_required: boolean;
   total: number;
   total_matches: number;
-  complemento: Complemento | null;
+  /** Solo en la última página del criterio (spec §2/§3). */
+  related: Related | null;
   suggestions: string[] | null;
-  content_language: string;
+  /** El spec §3 lo muestra, pero la instancia real no siempre lo manda. */
+  content_language?: string;
 }
 
 export interface ResponseChunkEvent {

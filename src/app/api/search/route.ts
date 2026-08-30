@@ -3,16 +3,16 @@ import { searchText } from "@/lib/p2/client";
 import { badRequest, errorResponse, readJsonBody } from "@/lib/api-helpers";
 
 /**
- * Primera consulta del portal (stateless): POST /search/text de P2, limit=10
- * (paginación 10 × 3, tope 30 — prompt-inicial §Flujo).
+ * Consulta del portal (stateless): POST /search/text de P2. Desde el 29/08
+ * también pagina (`offset`) y la última página trae `related` (spec §2).
  */
 export async function POST(req: Request) {
-  const body = await readJsonBody<{ query?: string; limit?: number }>(req);
+  const body = await readJsonBody<{ query?: string; limit?: number; offset?: number }>(req);
   const query = body?.query?.trim();
   if (!query) return badRequest("Falta la consulta.");
 
   try {
-    const data = await searchText(query, body?.limit ?? 10);
+    const data = await searchText(query, body?.limit ?? 10, body?.offset ?? 0);
     return NextResponse.json(data);
   } catch (err) {
     return errorResponse(err);

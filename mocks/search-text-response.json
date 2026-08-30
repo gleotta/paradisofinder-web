@@ -16,7 +16,7 @@
   "result": {
     "total": 2,
     "total_matches": 87,
-    "citta": "san_juan",
+    "market": "san_juan",
     "params_applied": { "vertical": "sale", "zones": ["Capital"], "property_type": "apartment" },
     "cards": [
       {
@@ -130,5 +130,5 @@
       }
     ]
   },
-  "complemento": null
+  "related": null
 }

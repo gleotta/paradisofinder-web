@@ -7,23 +7,29 @@
  * la búsqueda usa el canal con streaming de P2 abriendo una **sesión nueva por
  * consulta** (opción C), porque ese canal entrega los textos de P2/P3 que el
  * canal del portal no tiene: `suggestions`, el mensaje y los chips de
- * clarificación, el `riepilogo` con `nota_asuncion`, y el resumen en prosa.
+ * clarificación, el `summary` con `assumption_note`, y el resumen en prosa.
  * Registro y comparación de opciones en
  * `docs/DECISION_2026-08-29_busqueda-simple.md`.
  *
  * Flujo por búsqueda:
  *  1. `POST /sessions` → session_id (nuevo: sin memoria entre búsquedas).
- *  2. `POST /search/stream` (SSE): cards al instante → prosa en streaming → done.
- *     Manda 20 fijas (el endpoint no acepta `limit`): se muestran 10 y las otras
- *     10 quedan de buffer, así la página 2 sale sin red.
+ *  2. `POST /search/stream` (SSE): 20 cards al instante → prosa en streaming →
+ *     done. Se muestran 10 y las otras 10 quedan de buffer (página 2 sin red).
  *  3. Mapa: `POST /search/map {session_id}` — forma (b), P2 resuelve el criterio.
- *  4. Scroll: página 3 por `/search/structured` con `context.search_params` del
- *     `done` (viene en vocabulario viejo; P2 lo acepta como alias) — 10 × 3, tope 30.
- *     Agotado `total_matches`, `/search/semantic` suma "similares".
+ *  4. Scroll: páginas siguientes por el MISMO `/search/stream` con
+ *     `{session_id, offset}` sin `query` (paginación del 29/08: no es un turno,
+ *     sin LLM, ~100 ms) — de a 10 hasta agotar `total_matches`, SIN tope
+ *     (el tope de 30 se eliminó el 30/08: `related` viaja solo en la última
+ *     página del criterio, y con tope jamás llegaba — ver
+ *     `docs/DECISION_2026-08-30_scroll-completo.md`). El criterio vive en la
+ *     sesión de P2, así que nada se pierde al paginar
+ *     (`preferred_property_type`, `semantic_query`).
+ *     La última página puede venir corta (p. ej. 2 cards + 10 related con 62
+ *     resultados): igual se muestra entera.
  *
  * La sesión vive SOLO para esa búsqueda: los chips de clarificación
- * (`vertical_override`) y las `suggestions` se resuelven dentro de ella, porque
- * necesitan el criterio que P2 ya tiene acumulado de ese turno.
+ * (`vertical_override`), las `suggestions` y el scroll se resuelven dentro de
+ * ella, porque necesitan el criterio que P2 ya tiene acumulado de ese turno.
  */
 
 import { useRouter, useSearchParams } from "next/navigation";
@@ -32,15 +38,11 @@ import type {
   Card,
   CardsEvent,
   ClarificationEvent,
-  Complemento,
-  DoneEvent,
   MapPin,
   MapSearchResponse,
-  Riepilogo,
-  SearchResult,
+  Related,
   StreamErrorEvent,
-  StructuredParams,
-  StructuredResponse,
+  Summary,
 } from "@/lib/p2/types";
 import { readSSE } from "@/lib/sse";
 import { EVENTS, setTrackingSession, trackEvent } from "@/lib/track";
@@ -49,7 +51,6 @@ import PropertyCard from "./PropertyCard";
 import ResultsMap from "./ResultsMap";
 
 const PAGE_SIZE = 10;
-const CAP = 30;
 const DEFAULT_CHIPS = ["Comprar", "Alquilar", "Invertir"];
 /** Valores que acepta `vertical_override` (spec §3). */
 const OVERRIDE_BY_CHIP: Record<string, string> = {
@@ -67,22 +68,17 @@ const REPEAT_EXAMPLES = [
 interface ResultsState {
   query: string;
   /**
-   * Todo lo recibido: el stream manda 20 de una (no acepta `limit`, lo ignora),
-   * así que las 10 que sobran quedan de buffer para la página 2.
+   * Todo lo recibido: el turno manda 20 de una, así que las 10 que sobran
+   * quedan de buffer para la página 2 (sin red).
    */
   cards: Card[];
   /** Cuántas de `cards` se están mostrando: la página 1 son 10 (regla 10 × 3). */
   visibleCards: number;
   totalMatches: number;
-  riepilogo: Riepilogo | null;
-  complemento: Complemento | null;
-  similares: Card[];
+  summary: Summary | null;
+  /** Llega SOLO con la última página del criterio (máx 10, ya deduplicado). */
+  related: Related | null;
   suggestions: string[] | null;
-  /** `context.search_params` del evento `done`: base de la paginación. */
-  params: StructuredParams | null;
-  /** El stream cerró: `params` ya no va a llegar (llegó o se perdió). */
-  streamDone: boolean;
-  capReached: boolean;
 }
 
 interface Clarification {
@@ -114,7 +110,6 @@ export default function SearchResultsView() {
 
   const processedQuery = useRef<string | null>(null);
   const sessionRef = useRef<string | null>(null);
-  const semanticRef = useRef<{ offset: number; done: boolean }>({ offset: 0, done: false });
   const seenIds = useRef<Set<string>>(new Set());
   const mapKey = useRef<string | null>(null);
   const busyRef = useRef(false);
@@ -213,21 +208,16 @@ export default function SearchResultsView() {
             case "cards": {
               const ev = JSON.parse(data) as CardsEvent;
               gotCards = true;
-              semanticRef.current = { offset: 0, done: false };
               seenIds.current = new Set(ev.cards.map((c) => c.id));
-              for (const c of ev.complemento?.cards ?? []) seenIds.current.add(c.id);
+              for (const c of ev.related?.cards ?? []) seenIds.current.add(c.id);
               setResults({
                 query,
                 cards: ev.cards,
                 visibleCards: Math.min(PAGE_SIZE, ev.cards.length),
                 totalMatches: ev.total_matches,
-                riepilogo: ev.riepilogo,
-                complemento: ev.complemento,
-                similares: [],
+                summary: ev.summary,
+                related: ev.related,
                 suggestions: ev.suggestions,
-                params: null, // llega en `done`
-                streamDone: false,
-                capReached: false,
               });
               setTurn((t) => t + 1);
               // Los resultados YA están en pantalla: la búsqueda terminó para el
@@ -236,10 +226,10 @@ export default function SearchResultsView() {
               setSearching(false);
               busyRef.current = false;
               if (ev.total_matches === 0) trackEvent(EVENTS.ZERO_RESULTS, { mode: "search", query });
-              if (ev.complemento) {
-                trackEvent(EVENTS.COMPLEMENT_SHOWN, {
-                  motivo: ev.complemento.motivo,
-                  agregadas: ev.complemento.agregadas,
+              if (ev.related) {
+                trackEvent(EVENTS.RELATED_SHOWN, {
+                  reason: ev.related.reason,
+                  count: ev.related.count,
                 });
               }
               break;
@@ -255,20 +245,6 @@ export default function SearchResultsView() {
                   const text = pendingNarrative.current;
                   setNarrative({ text, streaming: true });
                 });
-              }
-              break;
-            }
-            case "done": {
-              // `context.search_params` es un body válido de /search/structured
-              // (vocabulario viejo, aceptado como alias): con eso pagina el scroll.
-              try {
-                const ev = JSON.parse(data) as DoneEvent;
-                const sp = ev.context?.search_params;
-                if (sp && typeof sp === "object" && !Array.isArray(sp)) {
-                  setResults((prev) => (prev ? { ...prev, params: sp as StructuredParams } : prev));
-                }
-              } catch {
-                /* sin params: el scroll cae a /search/semantic */
               }
               break;
             }
@@ -312,8 +288,6 @@ export default function SearchResultsView() {
           setNarrative(text ? { text, streaming: false } : null);
           busyRef.current = false;
           setSearching(false);
-          // Destraba el scroll aunque el stream se haya cerrado sin `params`.
-          setResults((prev) => (prev && !prev.streamDone ? { ...prev, streamDone: true } : prev));
         }
       }
     },
@@ -346,81 +320,66 @@ export default function SearchResultsView() {
     }
   }, [urlQuery, runSearch]);
 
-  /* ---------------- Scroll infinito (10 + 10 + 10, tope 30) ---------------- */
+  /* ------- Scroll infinito (de a 10 hasta agotar el criterio, sin tope) ------- */
 
   const loadMore = useCallback(async () => {
     const r = results;
-    if (!r || busyRef.current || r.capReached) return;
-    const shown = r.visibleCards + r.similares.length;
-    if (shown === 0) return;
+    if (!r || busyRef.current) return;
+    if (r.visibleCards === 0) return;
 
-    if (shown >= CAP) {
-      setResults((prev) => (prev ? { ...prev, capReached: true } : prev));
-      return;
-    }
-
-    // Página 2: ya está en memoria (el stream mandó 20). Sin red, sin spinner.
+    // Página 2: ya está en memoria (el turno mandó 20). Sin red, sin spinner.
     if (r.visibleCards < r.cards.length) {
-      const next = Math.min(r.cards.length, r.visibleCards + PAGE_SIZE, CAP - r.similares.length);
+      const next = Math.min(r.cards.length, r.visibleCards + PAGE_SIZE);
       trackEvent(EVENTS.PAGE_LOADED, { offset: r.visibleCards, kind: "buffer" });
       setResults((prev) => (prev ? { ...prev, visibleCards: next } : prev));
       return;
     }
 
-    // `params` viaja en `done`, que llega recién después de la prosa (~2,7 s):
-    // con la página 1 en 10, el scroll puede adelantarse. Esperarlo, porque caer
-    // a "similares" acá cambiaría la búsqueda por otra parecida.
-    if (!r.params && !r.streamDone && r.cards.length < r.totalMatches) return;
+    // Criterio agotado: si había "relacionadas", ya llegaron con la última página.
+    if (r.cards.length >= r.totalMatches) return;
 
+    const sessionId = sessionRef.current;
+    if (!sessionId) return;
+
+    // Páginas siguientes: paginación de la sesión (`{session_id, offset}` sin
+    // query) — no es un turno, no toca el estado de P2 y responde en ~100 ms
+    // con SSE cards → done sin narrativa. El criterio completo vive en P2:
+    // nada que reenviar ni que poder perder (`preferred_property_type` incluido).
+    const myRun = runSeq.current;
     busyRef.current = true;
     setLoadingMore(true);
     try {
-      if (r.cards.length < r.totalMatches && r.params) {
-        const limit = Math.min(PAGE_SIZE, CAP - shown);
-        const res = await fetch("/api/search/structured", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...r.params, offset: r.cards.length, limit }),
-        });
-        if (!res.ok) return;
-        const data = (await res.json()) as StructuredResponse;
-        const fresh = data.cards.filter((c) => !seenIds.current.has(c.id));
+      const res = await fetch("/api/search/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: sessionId,
+          offset: r.cards.length,
+          limit: PAGE_SIZE,
+        }),
+      });
+      if (!res.ok || !res.body) return;
+      await readSSE(res.body, ({ event, data }) => {
+        if (runSeq.current !== myRun || event !== "cards") return;
+        const ev = JSON.parse(data) as CardsEvent;
+        const fresh = ev.cards.filter((c) => !seenIds.current.has(c.id));
         for (const c of fresh) seenIds.current.add(c.id);
-        trackEvent(EVENTS.PAGE_LOADED, { offset: r.cards.length, kind: "structured" });
+        for (const c of ev.related?.cards ?? []) seenIds.current.add(c.id);
+        trackEvent(EVENTS.PAGE_LOADED, { offset: r.cards.length, kind: "session" });
+        if (ev.related) {
+          trackEvent(EVENTS.RELATED_SHOWN, { reason: ev.related.reason, count: ev.related.count });
+        }
         setResults((prev) =>
           prev
             ? {
                 ...prev,
                 cards: [...prev.cards, ...fresh],
                 visibleCards: prev.visibleCards + fresh.length,
+                related: ev.related ?? prev.related,
               }
             : prev,
         );
-      } else if (!semanticRef.current.done) {
-        const budget = CAP - shown;
-        const res = await fetch("/api/search/semantic", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            query: r.query,
-            offset: semanticRef.current.offset,
-            limit: Math.min(PAGE_SIZE, budget),
-          }),
-        });
-        if (!res.ok) {
-          semanticRef.current.done = true;
-          return;
-        }
-        const data = (await res.json()) as SearchResult;
-        semanticRef.current.offset += data.cards.length;
-        if (data.cards.length === 0) semanticRef.current.done = true;
-        const fresh = data.cards.filter((c) => !seenIds.current.has(c.id)).slice(0, budget);
-        for (const c of fresh) seenIds.current.add(c.id);
-        if (fresh.length > 0) {
-          trackEvent(EVENTS.PAGE_LOADED, { kind: "semantic", offset: semanticRef.current.offset });
-          setResults((prev) => (prev ? { ...prev, similares: [...prev.similares, ...fresh] } : prev));
-        }
-      }
+      });
     } finally {
       busyRef.current = false;
       setLoadingMore(false);
@@ -429,7 +388,7 @@ export default function SearchResultsView() {
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
-    if (!sentinel || !results || results.capReached) return;
+    if (!sentinel || !results) return;
     const io = new IntersectionObserver(
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) void loadMore();
@@ -658,44 +617,39 @@ export default function SearchResultsView() {
           </div>
         )}
 
-        {results?.complemento && results.complemento.cards.length > 0 && (
-          <>
-            <h2 className="section-title">
-              {zero ? "Podrían interesarte" : "Similares que no cumplen todos los filtros"}
-            </h2>
-            <p className="section-note">
-              {zero
-                ? "No cumplen tu búsqueda, pero son lo más parecido que hay publicado."
-                : "Se parecen a lo que pedís, aunque no cumplen todos los filtros."}
-            </p>
-            <div className="cards-grid">
-              {results.complemento.cards.map((card) => (
-                <PropertyCard key={card.id} card={card} similar />
-              ))}
+        {/* Cierre del listado duro: solo cuando hubo scroll real (más de una
+            página) — va ANTES de las relacionadas, que no son parte del total. */}
+        {results &&
+          results.totalMatches > PAGE_SIZE &&
+          results.cards.length >= results.totalMatches &&
+          results.visibleCards >= results.cards.length && (
+            <div className="sysmsg">
+              Eso es todo lo publicado para esta búsqueda ({fmtInt(results.totalMatches)} avisos).
             </div>
-          </>
-        )}
+          )}
 
-        {results && results.similares.length > 0 && (
-          <>
-            <h2 className="section-title">Similares que quizás te sirvan</h2>
-            <p className="section-note">
-              No cumplen todos los filtros de tu búsqueda; las agrego porque se le parecen.
-            </p>
-            <div className="cards-grid">
-              {results.similares.map((card) => (
-                <PropertyCard key={card.id} card={card} similar />
-              ))}
-            </div>
-          </>
-        )}
-
-        {results?.capReached && (
-          <div className="sysmsg">
-            Mostré los 30 mejores resultados para esta búsqueda. Afiná el criterio — barrio, rango
-            de precio, tipo de propiedad — para ver otras.
-          </div>
-        )}
+        {/* `related` (embeddings, máx 10): el cierre del scroll — llega solo con
+            la última página del criterio, ya deduplicado por P2. Se muestra
+            recién cuando el buffer de resultados duros está todo en pantalla. */}
+        {results?.related &&
+          results.related.cards.length > 0 &&
+          results.visibleCards >= results.cards.length && (
+            <>
+              <h2 className="section-title">
+                {zero ? "Podrían interesarte" : "Similares que no cumplen todos los filtros"}
+              </h2>
+              <p className="section-note">
+                {zero
+                  ? "No cumplen tu búsqueda, pero son lo más parecido que hay publicado."
+                  : "Se parecen a lo que pedís, aunque no cumplen todos los filtros."}
+              </p>
+              <div className="cards-grid">
+                {results.related.cards.map((card) => (
+                  <PropertyCard key={card.id} card={card} similar />
+                ))}
+              </div>
+            </>
+          )}
 
         {(searching || loadingMore) && (
           <div className="loading-row" role="status">
@@ -741,10 +695,10 @@ function ResultsHead({ results, query }: { results: ResultsState | null; query: 
     );
   }
 
-  // `riepilogo` ya viene resuelto y localizado por P2: se muestra tal cual.
-  const r = results.riepilogo;
-  const pills = [r?.vertical, r?.tipo, r?.zona, r?.budget].filter(Boolean) as string[];
-  if (r?.orden) pills.push(`Orden: ${r.orden}`);
+  // `summary` ya viene resuelto y localizado por P2: se muestra tal cual.
+  const s = results.summary;
+  const pills = [s?.vertical, s?.property_type, s?.zone, s?.budget].filter(Boolean) as string[];
+  if (s?.order) pills.push(`Orden: ${s.order}`);
 
   return (
     <div className="results-head">
@@ -753,14 +707,14 @@ function ResultsHead({ results, query }: { results: ResultsState | null; query: 
         {fmtInt(results.totalMatches)} {results.totalMatches === 1 ? "resultado" : "resultados"}
       </h1>
       {query && <p className="results-query">para: «{query}»</p>}
-      {(pills.length > 0 || r?.nota_asuncion) && (
+      {(pills.length > 0 || s?.assumption_note) && (
         <div className="applied-pills">
           {pills.map((pill) => (
             <span className="pill" key={pill}>
               {pill}
             </span>
           ))}
-          {r?.nota_asuncion && <span className="pill pill--note">{r.nota_asuncion}</span>}
+          {s?.assumption_note && <span className="pill pill--note">{s.assumption_note}</span>}
         </div>
       )}
     </div>

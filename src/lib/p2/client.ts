@@ -18,14 +18,12 @@ import type {
   StreamRequest,
   StructuredParams,
   StructuredResponse,
-  SearchResult,
   TrackEventBody,
 } from "./types";
 import {
   mockCreateSession,
   mockGetProperty,
   mockSearchMap,
-  mockSearchSemantic,
   mockSearchStream,
   mockSearchStructured,
   mockSearchText,
@@ -125,16 +123,12 @@ async function p2Json<T>(path: string, body: unknown, fallback: () => Promise<T>
 /* Búsqueda del portal (stateless) — spec §2                           */
 /* ------------------------------------------------------------------ */
 
-export function searchText(query: string, limit = 10): Promise<SearchTextResponse> {
-  return p2Json("/search/text", { query, limit }, () => mockSearchText(query, limit));
+export function searchText(query: string, limit = 10, offset = 0): Promise<SearchTextResponse> {
+  return p2Json("/search/text", { query, limit, offset }, () => mockSearchText(query, limit, offset));
 }
 
 export function searchStructured(params: StructuredParams): Promise<StructuredResponse> {
   return p2Json("/search/structured", params, () => mockSearchStructured(params));
-}
-
-export function searchSemantic(query: string, offset = 0, limit = 10): Promise<SearchResult> {
-  return p2Json("/search/semantic", { query, offset, limit }, () => mockSearchSemantic(query, offset, limit));
 }
 
 /**
@@ -156,11 +150,17 @@ export function createSession(): Promise<SessionResponse> {
 
 /**
  * Devuelve la Response SSE de P2 (o del mock) para reenviar el body al browser.
+ * Sirve para el turno (`{session_id, query}`) y para la paginación
+ * (`{session_id, offset}` sin `query`: cards → done, sin narrativa).
  * En SSE los errores de negocio llegan como `event: error` (HTTP 200);
  * un HTTP != 200 acá es error de transporte/sesión (p. ej. 404 sesión expirada).
  */
 export async function searchStream(body: StreamRequest): Promise<Response> {
-  if (mocksEnabled()) return mockSearchStream(body);
+  if (mocksEnabled()) {
+    const res = mockSearchStream(body);
+    if (!res.ok) throw await readError(res);
+    return res;
+  }
   try {
     const res = await p2Fetch("/search/stream", {
       method: "POST",
