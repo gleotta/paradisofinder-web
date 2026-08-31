@@ -529,7 +529,7 @@ export default function SearchResultsView() {
           <div className="zero-state" role="status">
             <h3>Una precisión antes de buscar</h3>
             <p>{clarification.message}</p>
-            {clarification.chips.length > 0 && (
+            {clarification.chips.length > 0 ? (
               <div className="msg-chips">
                 {clarification.chips.map((chip) => (
                   <button
@@ -542,6 +542,26 @@ export default function SearchResultsView() {
                   </button>
                 ))}
               </div>
+            ) : (
+              // P2 puede clarificar SIN chips (visto 31/08: reason "otra_ciudad",
+              // chips=[] y nivel1_required=false). Sin acciones el bloque es un
+              // callejón sin salida: se ofrecen búsquedas de ejemplo, como en el
+              // caso `repeat`.
+              <>
+                <p className="section-note">Probá, por ejemplo:</p>
+                <div className="msg-chips">
+                  {REPEAT_EXAMPLES.map((ex) => (
+                    <button
+                      key={ex}
+                      className="chip chip--action"
+                      onClick={() => submitQuery(ex)}
+                      disabled={searching}
+                    >
+                      {ex}
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         )}
