@@ -7,18 +7,100 @@ con listado + mapa (patrón Airbnb). Next.js (App Router). Antes de tocar códig
 dos registros de decisión que revierten cosas de esos documentos:
 `docs/DECISION_2026-08-29_mapa.md` y `docs/DECISION_2026-08-29_busqueda-simple.md`.
 
-## Correr en desarrollo
+## Requisitos
+
+- **Node.js ≥ 20.9** (`engines` de Next 16; probado en 24.2) y npm 10+.
+- **P2 (FINDER Core)** en `http://localhost:8000` — el Docker de la instancia San Juan.
+  Es opcional: sin P2, P1 sirve los mocks de `/mocks` (modo demo).
+
+## Instalación
 
 ```bash
 npm install
-npm run dev        # http://localhost:3000
+cp .env.example .env.local     # y editar — ver Configuración
 ```
 
-**Ya viene apuntado a P2 real** (`.env.local` → `http://localhost:8000`, el Docker local).
-Si P2 está apagado, cae solo a los mocks de `/mocks` (modo demo). Para cambiar de
-instancia, editar `.env.local` (ver `.env.example`).
+`.gitignore` excluye `.env*`: nunca se commitea.
 
-`P2_MODE`: `auto` (default: P2 si hay URL, mocks si la conexión falla) · `live` · `mock`.
+## Configuración
+
+Tres variables, las tres **solo del server**. Topología A: el browser nunca habla con P2,
+así que **ninguna lleva prefijo `NEXT_PUBLIC_`** — eso filtraría la API key al bundle del
+cliente.
+
+| Variable | Default | Qué hace |
+|---|---|---|
+| `P2_BASE_URL` | vacío → mocks | URL base de P2 **sin** `/api/v1` (lo agrega `src/lib/p2/client.ts`). Docker local: `http://localhost:8000`. |
+| `P2_API_KEY` | vacío | Header `X-API-Key`. Vacío = auth apagada, que es como está el Docker de desarrollo. |
+| `P2_MODE` | `auto` | `auto`: P2 si hay URL, y ante fallo de **conexión** cae a mocks con warning · `live`: solo P2, los errores se propagan · `mock`: siempre mocks. |
+
+El `.env.local` de esta máquina **ya viene apuntado al P2 real**. Ojo con `.env.example`:
+dice puerto 8001 (instancia de prueba), la instancia real es la **8000**.
+
+Cambiar cualquiera de las tres **requiere reiniciar**: Next lee el env al arrancar.
+
+## Ejecución
+
+Desarrollo, con hot reload:
+
+```bash
+npm run dev                    # http://localhost:3000
+PORT=3001 npm run dev          # otro puerto
+```
+
+Next 16 **no deja levantar dos `next dev` sobre el mismo directorio**, ni siquiera en
+puertos distintos: el segundo aborta con `Another next dev server is already running` y te
+dice el PID del que ya está. Quién corre y en qué puerto, sin adivinar:
+
+```bash
+cat .next/dev/lock    # {"pid":…,"port":3000,"appUrl":"http://localhost:3000","startedAt":…}
+```
+
+En segundo plano. Next ya escribe su propio log en `.next/dev/logs/next-development.log`;
+el `nohup` guarda además el banner de arranque y los errores de compilación:
+
+```bash
+nohup npm run dev > /tmp/pf-dev.log 2>&1 &
+tail -f /tmp/pf-dev.log
+```
+
+Build de producción local:
+
+```bash
+npm run build && npm start      # http://localhost:3000
+npm run lint
+```
+
+**Parar.** `npm run dev` levanta tres procesos (`npm run dev` → `next dev` → `next-server`)
+y matar el de arriba no siempre arrastra a los de abajo: puede quedar el puerto tomado. Al
+que hay que matar es al que escucha — eso sí baja el árbol entero y borra el lock:
+
+```bash
+kill $(lsof -t -iTCP:3000 -sTCP:LISTEN)
+```
+
+Si igual quedó algo colgado, el grupo completo — PGID es la 3ra columna:
+
+```bash
+ps -Ao pid,ppid,pgid,command | grep "next dev"
+kill -TERM -<PGID>
+```
+
+**Reiniciar** = parar + `npm run dev`. No hay scripts `stop`/`restart` en `package.json`.
+
+## Verificar que anda
+
+```bash
+curl -s -o /dev/null -w "P1 %{http_code}\n" http://localhost:3000/
+curl -s -o /dev/null -w "P2 %{http_code}\n" http://localhost:8000/api/v1/health
+open http://localhost:8000/docs        # Swagger vivo de P2 — la fuente de verdad del contrato
+```
+
+Si P1 responde 200 pero los resultados huelen a demo, es que P2 no contestó y `P2_MODE=auto`
+cayó a los mocks: está el warning en el log del server. Para que eso falle ruidosamente en
+vez de degradar en silencio, `P2_MODE=live`.
+
+Consultas de humo contra P2 real: al final de este README, en **Consultas para probar**.
 
 ## Arquitectura (topología A)
 
