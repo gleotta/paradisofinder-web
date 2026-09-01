@@ -269,6 +269,65 @@ img {
   color: #a394b1;
 }
 
+/* ==================== Selector de vertical (01/09) ==================== */
+
+/* Segmentado Alquilar · Comprar · Invertir (opción A de la propuesta).
+   El activo usa el mismo lenguaje que .chip--active: violeta sólido. */
+.vseg {
+  display: inline-flex;
+  gap: 2px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px;
+  box-shadow: var(--shadow);
+}
+
+.vseg button {
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 9px 26px;
+  font-size: 14.5px;
+  /* también hace visible la re-sincronización cuando el texto manda */
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.vseg button:hover {
+  color: var(--purple);
+}
+
+.vseg button[aria-pressed="true"] {
+  background: var(--purple);
+  color: var(--white);
+  font-weight: 600;
+}
+
+.vseg button:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.vseg--hero {
+  margin-bottom: 18px;
+}
+
+/* Variante compacta dentro de la barra sticky de resultados: grupo lila
+   sobre la píldora blanca. */
+.searchbar-row .vseg {
+  flex: none;
+  background: var(--lilac);
+  border: 0;
+  box-shadow: none;
+  padding: 3px;
+}
+
+.searchbar-row .vseg button {
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
 /* ============================== Chips ============================== */
 
 .chips-row {
@@ -363,7 +422,8 @@ img {
   border: 1px solid var(--line);
   border-radius: 999px;
   box-shadow: var(--shadow);
-  padding: 6px 6px 6px 20px;
+  /* el selector de vertical va primero: el aire izquierdo lo pone el input */
+  padding: 6px;
   margin-bottom: 18px;
 }
 
@@ -381,7 +441,7 @@ img {
   font-family: var(--body);
   font-size: 15.5px;
   color: var(--ink);
-  padding: 8px 0;
+  padding: 8px 0 8px 12px;
 }
 
 .searchbar-row input::placeholder {
@@ -1632,6 +1692,19 @@ details.score summary .why {
     font-size: 13.5px;
   }
 
+  /* selector de vertical: ancho completo con el MISMO aire lateral que el
+     buscador (nada pegado a los bordes en mobile) */
+  .vseg--hero {
+    display: flex;
+    margin: 0 16px 14px;
+  }
+
+  .vseg--hero button {
+    flex: 1;
+    padding: 10px 0;
+    font-size: 14px;
+  }
+
   /* iOS hace zoom al enfocar inputs con menos de 16px */
   .searchbox input,
   .dock-form input {
@@ -1665,10 +1738,23 @@ details.score summary .why {
     padding: 20px;
   }
 
+  /* barra de resultados en dos filas: selector arriba, input + botón abajo
+     (los tres segmentos + input + botón no entran en 390px) */
   .searchbar-row {
     padding: 8px;
     border-radius: 18px;
     gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .searchbar-row .vseg {
+    flex: 1 1 100%;
+    display: flex;
+  }
+
+  .searchbar-row .vseg button {
+    flex: 1;
+    padding: 8px 0;
   }
 
   .searchbar-row input {

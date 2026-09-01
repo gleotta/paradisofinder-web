@@ -47,8 +47,16 @@ import type {
 import { readSSE } from "@/lib/sse";
 import { EVENTS, setTrackingSession, trackEvent } from "@/lib/track";
 import { fmtInt } from "@/lib/format";
+import {
+  isVerticalId,
+  storeVertical,
+  VERTICAL_PHRASE,
+  verticalFromSummary,
+  type VerticalId,
+} from "@/lib/vertical";
 import PropertyCard from "./PropertyCard";
 import ResultsMap from "./ResultsMap";
+import VerticalSelector from "./VerticalSelector";
 
 const PAGE_SIZE = 10;
 const DEFAULT_CHIPS = ["Comprar", "Alquilar", "Invertir"];
@@ -64,6 +72,16 @@ const REPEAT_EXAMPLES = [
   "departamento en Capital hasta 60 mil dólares",
   "casa de 3 dormitorios con patio",
 ];
+
+/**
+ * Clave de "búsqueda ya disparada" (query + vertical de la URL). ÚNICA
+ * definición: el efecto la compara y `changeVertical` la pre-marca para
+ * actualizar la URL sin relanzar la búsqueda — si divergen, el efecto pisa
+ * el turno en-sesión con una búsqueda nueva y el selector rebota.
+ */
+function runKey(q: string, v: VerticalId | null): string {
+  return `${q}|${v ?? ""}`;
+}
 
 interface ResultsState {
   query: string;
@@ -88,12 +106,26 @@ interface Clarification {
   repeat: boolean;
 }
 
+interface RunOpts {
+  override?: string;
+  keepSession?: boolean;
+  vertical?: VerticalId | null;
+}
+
 export default function SearchResultsView() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlQuery = searchParams.get("q") ?? "";
+  const rawUrlVertical = searchParams.get("v");
+  const urlVertical = isVerticalId(rawUrlVertical) ? rawUrlVertical : null;
 
   const [input, setInput] = useState(urlQuery);
+  /**
+   * Selector de vertical (01/09): refleja lo que la búsqueda EN CURSO hizo,
+   * no la preferencia guardada — arranca del `v` de la URL y después se
+   * re-sincroniza con el `summary` de P2 (regla 2: el texto manda).
+   */
+  const [vertical, setVertical] = useState<VerticalId | null>(urlVertical);
   const [results, setResults] = useState<ResultsState | null>(null);
   const [narrative, setNarrative] = useState<{ text: string; streaming: boolean } | null>(null);
   const [clarification, setClarification] = useState<Clarification | null>(null);
@@ -113,7 +145,10 @@ export default function SearchResultsView() {
   const seenIds = useRef<Set<string>>(new Set());
   const mapKey = useRef<string | null>(null);
   const busyRef = useRef(false);
-  const lastRun = useRef<{ query: string; override?: string } | null>(null);
+  /** Última corrida completa (query + opts) para el botón Reintentar. */
+  const lastRun = useRef<{ query: string; opts?: RunOpts } | null>(null);
+  /** Espejo del selector para comparar en el handler del SSE sin closures viejos. */
+  const verticalRef = useRef<VerticalId | null>(urlVertical);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const pendingNarrative = useRef("");
   const flushHandle = useRef<number | null>(null);
@@ -124,7 +159,7 @@ export default function SearchResultsView() {
   /* ---------------- Búsqueda (sesión nueva + SSE) ---------------- */
 
   const runSearch = useCallback(
-    async (query: string, opts?: { override?: string; keepSession?: boolean }) => {
+    async (query: string, opts?: RunOpts) => {
       // Una búsqueda nueva aborta el stream anterior (puede seguir escribiendo
       // el resumen) en vez de rebotar contra el guard.
       abortRef.current?.abort();
@@ -144,8 +179,13 @@ export default function SearchResultsView() {
         cancelAnimationFrame(flushHandle.current);
         flushHandle.current = null;
       }
-      lastRun.current = { query, override: opts?.override };
-      trackEvent(EVENTS.SEARCH, { mode: "search", query, vertical_override: opts?.override });
+      lastRun.current = { query, opts };
+      trackEvent(EVENTS.SEARCH, {
+        mode: "search",
+        query,
+        vertical_override: opts?.override,
+        vertical: opts?.vertical ?? null,
+      });
 
       if (!opts?.keepSession) {
         // Búsqueda nueva = sesión nueva: sin memoria de la anterior.
@@ -177,6 +217,9 @@ export default function SearchResultsView() {
               session_id: sessionId,
               query,
               ...(opts?.override ? { vertical_override: opts.override } : {}),
+              // La selección viaja aparte y CRUDA: el server decide si compone
+              // la frase canónica (sonda de extracción — el texto predomina).
+              ...(opts?.vertical && !opts?.override ? { vertical: opts.vertical } : {}),
             }),
           });
 
@@ -220,6 +263,21 @@ export default function SearchResultsView() {
                 suggestions: ev.suggestions,
               });
               setTurn((t) => t + 1);
+              // Re-sincronización del selector (regla 2: el texto manda): el
+              // botón refleja lo que P2 REALMENTE buscó. Si el summary no
+              // mapea (p. ej. temporario), queda sin selección y la
+              // preferencia guardada no se toca.
+              const detected = verticalFromSummary(ev.summary);
+              if (detected !== verticalRef.current) {
+                trackEvent(EVENTS.VERTICAL_RESYNC, {
+                  from: verticalRef.current,
+                  to: detected,
+                  query,
+                });
+                verticalRef.current = detected;
+                setVertical(detected);
+                if (detected) storeVertical(detected);
+              }
               // Los resultados YA están en pantalla: la búsqueda terminó para el
               // usuario. Esperar a que cierre el stream dejaba el spinner y el
               // botón bloqueados ~2 s de más mientras se escribía el resumen.
@@ -296,29 +354,79 @@ export default function SearchResultsView() {
     [],
   );
 
-  /** Navegar cambia `?q=`, y el efecto dispara la búsqueda (sesión nueva). */
+  /** Navegar cambia `?q=` (y `v`), y el efecto dispara la búsqueda (sesión nueva). */
   const submitQuery = useCallback(
-    (query: string) => {
+    (query: string, v?: VerticalId | null) => {
       const q = query.trim();
       if (!q) return;
+      const vert = v === undefined ? verticalRef.current : v;
       setInput(q);
-      if (q === urlQuery) {
+      if (q === urlQuery && vert === urlVertical) {
         processedQuery.current = null;
-        void runSearch(q);
+        void runSearch(q, { vertical: vert });
       } else {
-        router.push(`/buscar?q=${encodeURIComponent(q)}`);
+        const params = new URLSearchParams({ q });
+        if (vert) params.set("v", vert);
+        router.push(`/buscar?${params.toString()}`);
       }
     },
-    [router, runSearch, urlQuery],
+    [router, runSearch, urlQuery, urlVertical],
   );
 
   useEffect(() => {
-    if (urlQuery && processedQuery.current !== urlQuery) {
-      processedQuery.current = urlQuery;
+    // La clave incluye el vertical: cambiar solo el botón (misma query)
+    // también es una búsqueda nueva.
+    const key = runKey(urlQuery, urlVertical);
+    if (urlQuery && processedQuery.current !== key) {
+      processedQuery.current = key;
       setInput(urlQuery);
-      void runSearch(urlQuery);
+      verticalRef.current = urlVertical;
+      setVertical(urlVertical);
+      void runSearch(urlQuery, { vertical: urlVertical });
     }
-  }, [urlQuery, runSearch]);
+  }, [urlQuery, urlVertical, runSearch]);
+
+  /**
+   * Click en el selector: queda como preferencia y cambia la búsqueda vigente.
+   *
+   * Con resultados en pantalla el click es la intención MÁS reciente y le
+   * gana al texto YA buscado — si no, con un texto tipo "depto para alquilar"
+   * el botón rebotaba a Alquilar y parecía roto (reporte de German 01/09).
+   * Se resuelve DENTRO de la misma sesión para no perder el criterio
+   * acumulado (zona, tipo, presupuesto — verificado contra P2 real):
+   * `vertical_override` para alquilar/comprar; para invertir, la frase como
+   * refinamiento (el override `invertir` de P2 cae en compra sin orden).
+   * Lo tipeado sigue mandando al momento de buscar texto NUEVO.
+   *
+   * Sin resultados (o toggle-off del activo): búsqueda nueva — sin selección
+   * P2 infiere del texto, como siempre.
+   */
+  const changeVertical = useCallback(
+    (v: VerticalId | null) => {
+      verticalRef.current = v;
+      setVertical(v);
+      storeVertical(v);
+      trackEvent(EVENTS.VERTICAL_SELECTED, { vertical: v, screen: "results" });
+      if (!urlQuery) return;
+
+      if (v && results && sessionRef.current) {
+        if (v === "invertir") {
+          void runSearch(VERTICAL_PHRASE.invertir, { keepSession: true });
+        } else {
+          void runSearch(urlQuery, { override: v, keepSession: true });
+        }
+        // La URL acompaña (link compartible / back reproducible) sin relanzar
+        // el efecto: la clave ya se marca como procesada.
+        processedQuery.current = runKey(urlQuery, v);
+        const params = new URLSearchParams({ q: urlQuery, v });
+        router.replace(`/buscar?${params.toString()}`, { scroll: false });
+        return;
+      }
+
+      submitQuery(urlQuery, v);
+    },
+    [results, router, runSearch, submitQuery, urlQuery],
+  );
 
   /* ------- Scroll infinito (de a 10 hasta agotar el criterio, sin tope) ------- */
 
@@ -456,6 +564,13 @@ export default function SearchResultsView() {
     (chip: string) => {
       const lower = chip.toLowerCase();
       trackEvent(EVENTS.CLARIFICATION_CHIP, { chip, mode: "search" });
+      // Elegir "Comprar"/"Alquilar"/"Invertir" acá también es elegir vertical:
+      // el selector y la preferencia acompañan (el summary lo confirma después).
+      if (isVerticalId(lower)) {
+        verticalRef.current = lower;
+        setVertical(lower);
+        storeVertical(lower);
+      }
       void runSearch(urlQuery, { override: OVERRIDE_BY_CHIP[lower] ?? lower, keepSession: true });
     },
     [runSearch, urlQuery],
@@ -489,6 +604,12 @@ export default function SearchResultsView() {
           }}
           role="search"
         >
+          <VerticalSelector
+            className="vseg--bar"
+            value={vertical}
+            onChange={changeVertical}
+            disabled={searching}
+          />
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -592,7 +713,7 @@ export default function SearchResultsView() {
                 className="btn btn-magenta"
                 onClick={() => {
                   const last = lastRun.current;
-                  if (last) void runSearch(last.query, { override: last.override });
+                  if (last) void runSearch(last.query, last.opts);
                 }}
               >
                 Reintentar

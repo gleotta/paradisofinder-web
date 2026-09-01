@@ -5,7 +5,10 @@ import SearchHero from "@/components/SearchHero";
  * búsqueda simple, ya no conversacional — ver
  * `docs/DECISION_2026-08-29_busqueda-simple.md`).
  * Campo de texto libre central; los chips de oportunidad son atajos que
- * alimentan la búsqueda. Sin selector de vertical: P2 la infiere del texto.
+ * alimentan la búsqueda. Selector de vertical Alquilar · Comprar · Invertir
+ * desde el 01/09 (`docs/DECISION_2026-09-01_selector-vertical.md`): queda como
+ * preferencia, pero lo que escribe el usuario predomina y re-sincroniza el
+ * botón. Sin selección, P2 infiere del texto como antes.
  */
 export default function HomePage() {
   return (
