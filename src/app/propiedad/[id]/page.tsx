@@ -299,7 +299,9 @@ function indicatorList(p: PropertyDetail): { label: string; value: string }[] {
 function hardDataList(p: PropertyDetail): [string, string][] {
   const out: [string, string][] = [];
   const isRoom = p.property_type === "room";
-  out.push(["Tipo", PROPERTY_TYPE_LABEL[p.property_type] ?? "Propiedad"]);
+  // Sello de dúplex (delta 01/09): marca ortogonal al tipo, solo con true.
+  const typeLabel = PROPERTY_TYPE_LABEL[p.property_type] ?? "Propiedad";
+  out.push(["Tipo", p.is_duplex === true ? `${typeLabel} · Dúplex` : typeLabel]);
   out.push(["Operación", OPERATION_LABEL[p.operation]]);
   if (isRoom) {
     // Habitaciones: el mínimo de visibilidad son las camas, no los metros.

@@ -50,6 +50,9 @@ function PropertyCardBase({
     if (card[key] === true) attrs.push(ATTRIBUTE_LABEL[key]);
   }
   if (isRoom && card.room_class) attrs.unshift(ROOM_CLASS_LABEL[card.room_class]);
+  // Sello de dúplex (delta 01/09): en las listas de casas aparecen al final y
+  // el sello es lo que los distingue. SOLO con true — null = no evaluado.
+  if (card.is_duplex === true) attrs.unshift("Dúplex");
   if (card.condition && card.condition !== "unknown") attrs.push(CONDITION_LABEL[card.condition]);
   if (card.operation === "sale" && card.gross_yield_pct != null) {
     attrs.push(`Renta est. ${fmtPct(card.gross_yield_pct)}`);

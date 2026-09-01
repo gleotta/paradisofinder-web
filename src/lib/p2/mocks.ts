@@ -346,6 +346,8 @@ export function mockCard(n: number, kind: IdKind, opts: { zones?: string[]; tipo
     listing_updated_at: "2026-08-21",
     quality_tier: n % 8 === 5 ? 1 : 2,
     quality_score: Math.round((0.55 + r(14) * 0.4) * 100) / 100,
+    // Marca ortogonal al tipo (delta 01/09): hay dúplex-depto y dúplex-casa.
+    is_duplex: (type === "apartment" || type === "house") && n % 7 === 5 ? true : null,
     pool: isSale && n % 5 === 0 ? true : null,
     bbq_area: n % 4 === 0 ? true : null,
     patio: type === "house" ? true : null,

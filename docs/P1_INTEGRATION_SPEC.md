@@ -9,9 +9,11 @@ schemas reales) y `SPECS.md`.
 **Mercado activo:** `san_juan` (es-AR). Todos los endpoints con prefijo
 `/api/v1/`.
 
-**Última actualización:** 2026-08-30. Si venías integrando con una versión
-anterior, empezá por **`CAMBIOS_P2_PARA_P1_2026-08-30.md`** (delta + checklist
-de migración). Cambios del 29-30/08 — `POST /search/map` implementado
+**Última actualización:** 2026-09-01. Si venías integrando con una versión
+anterior, empezá por los deltas con checklist de migración:
+**`CAMBIOS_P2_PARA_P1_2026-09-01.md`** (el dúplex pasa a filtrar con
+`is_duplex`, que además llega en la Card; `place`) y antes
+**`CAMBIOS_P2_PARA_P1_2026-08-30.md`**. Cambios del 29-30/08 — `POST /search/map` implementado
 (§2, cierra el hueco §4.1 del handoff) y **paginación unificada**: los
 resultados son siempre estructurados y paginados en los tres endpoints; las
 `related` (embeddings, máx 10) llegan solo en la última página.
@@ -39,9 +41,15 @@ castellano/italiano migradas al contrato inglés.
 
 ## 1. Los dos modos de uso (no mezclar)
 
+> **Hoy P1 usa el canal CONVERSACIONAL** (`POST /search/stream`, SSE; `POST
+> /search` como fallback sync). El canal del portal existe y está soportado,
+> pero no es el que está integrado. `/search/structured` y `/search/semantic`
+> **no son endpoints de P1** en ninguno de los dos modos.
+
+
 | Modo | Endpoints | Estado |
 |---|---|---|
-| **Búsqueda del portal** (barra de búsqueda, sin conversación) | `POST /search/text` + `POST /search/structured` (scroll) + `POST /search/semantic` | STATELESS — sin sesión |
+| **Búsqueda del portal** (barra de búsqueda, sin conversación) | `POST /search/text` con `limit`/`offset` | STATELESS — sin sesión |
 | **Mapa** (los dos modos) | `POST /search/map` — criterio estructurado *o* `session_id` | Stateless o con sesión, según la forma |
 | **Conversacional** (chat con refinamientos) | `POST /sessions` + `POST /search/stream` (SSE) o `POST /search` (sync fallback) | Con sesión: el estado se ACUMULA turno a turno en P2 |
 
@@ -71,8 +79,9 @@ SOLO cuando lo estructurado se agotó.
 1. Página 1: `POST /search/text` `{query, limit, offset: 0}`.
 2. Páginas siguientes: **el mismo** `/search/text` con `offset` (20, 40, …;
    máx 10000). Orden determinístico (desempate por `id`) → sin solapes.
-   *(También sirve `/search/structured` con `extraction.params` + `offset`
-   si P1 prefiere no repetir la extracción: es el mismo SQL.)*
+   *(Stateless: re-extrae por página — 2,1-2,7 s cuando la consulta no la
+   cubre el fast-path. Si algún día este canal scrollea intensivo, se cachea
+   la extracción por texto de consulta.)*
 3. **Última página**: cuando `offset + result.total >= total_matches`, la
    respuesta trae además `related` — hasta **10** cards por embeddings.
    P1 ya no tiene que llamar a `/search/semantic` ni deduplicar: viene
@@ -199,24 +208,43 @@ Request: `{ session_id, query, vertical_override? }`
 {
   "session_id": "…",
   "cards": [ /* Card[], ver §5 */ ],
-  "riepilogo": {            // resumen estructurado (ya es-AR)
-    "vertical": "Alquiler", "zona": "Capital, Rivadavia",
-    "tipo": "Departamento", "budget": "hasta $ 700.000 (ARS)",
-    "orden": "Opportunity Score",
-    "nota_asuncion": "Asumí compra — decime si buscás alquilar" /*|null*/,
-    "total_resultados": 142        // = total_matches REAL en DB
+  "summary": {              // resumen estructurado (textos ya es-AR)
+    "vertical": "Alquiler", "zone": "Capital, Rivadavia",
+    "property_type": "Departamento", "budget": "hasta $ 700.000 (ARS)",
+    "order": "Opportunity Score",
+    "assumption_note": "Asumí compra — decime si buscás alquilar" /*|null*/,
+    "total_results": 142           // = total_matches REAL en DB
   },
   "nivel1_required": false,
   "total": 20,                     // cards en este payload (= limit pedido)
   "total_matches": 142,            // total real en DB — paginar con offset
   "related": { "reason": "structured_exhausted", "count": 10,
                "cards": [ /* similares — render separado */ ] },  // |null:
-                          // solo en la ÚLTIMA página, máx 10
+                          // SOLO en la ÚLTIMA página, máx 10 — ver abajo
   "suggestions": ["Ampliar la zona", "Ajustar el presupuesto"],      // |null (con 0 resultados)
   "content_language": "es-AR"      // idioma de los TEXTOS de P3 (las claves son inglés)
 }
 ```
-Acción P1: renderizar cards + riepilogo AL INSTANTE (mediana ~20 ms).
+Acción P1: renderizar cards + summary AL INSTANTE (mediana ~20 ms).
+
+> ⚠️ **`related` viaja DENTRO de este evento `cards`, no en `done`.** Es el
+> error de integración más fácil de cometer: si P1 espera el `done` para
+> leerlos, no los ve nunca.
+>
+> **Cuándo llega:** solo cuando la página AGOTA los resultados duros, es
+> decir `offset + total >= total_matches`. No depende de que haya "pocos"
+> resultados:
+>
+> | escenario | `related` |
+> |---|---|
+> | 9 resultados, `limit=20` → la página 1 ya es la última | **sí** |
+> | 58 resultados, `limit=20`, `offset=0` | `null` |
+> | 58 resultados, `limit=20`, `offset=40` → devuelve 18, la última | **sí, 10** |
+>
+> Verificado contra la DB real el 30/08 en este mismo endpoint.
+> **Consecuencia de producto:** si el scroll de P1 no llega al final, en una
+> búsqueda de 58 resultados el usuario NUNCA ve los relacionados. Es la regla
+> pedida (30/08), pero conviene tenerla presente al diseñar el scroll.
 
 #### event: response_chunk
 `{ "token": "…" }` — la narrativa natural de la IA, en streaming
@@ -335,15 +363,31 @@ el 29/08). Se resuelve en dos pasos, en orden:
 Si un usuario se queja de "busqué para alquilar y me mostró alquileres", la
 respuesta es: está bien.
 
-**Dúplex — preferencia, nunca filtro** (28/08, implementación corregida el
-30/08). Quien busca DEPARTAMENTO ve los dúplex; quien busca DÚPLEX ve
-primero los que lo son y detrás los departamentos. Llega como
-`property_type: null` + `preferred_property_type: "apartment"` +
-`semantic_query: "dúplex"`.
+**Dúplex — categoría propia con dato propio** (01/09; reemplaza la
+preferencia blanda de 28/08 y 30/08). P3 entregó `es_duplex`, así que el
+dúplex FILTRA como cualquier categoría:
 
-*Por qué no es un filtro:* P3 no tipifica el dúplex — de los 60 avisos que
-lo dicen, 14 quedaron como `house`. Filtrar duro por `apartment` los
-excluía (en Rawson, al único dúplex que existe).
+| el usuario busca | llega como | qué devuelve |
+|---|---|---|
+| dúplex | `is_duplex: true`, `property_type: null` | SOLO dúplex — de los dos tipos de base |
+| departamento | `property_type: "apartment"` | departamentos **+ los dúplex mezclados** (para el usuario un dúplex es un depto) |
+| casa | `property_type: "house"` | casas **+ los dúplex al FINAL** de la lista |
+
+`property_type: null` cuando se pide dúplex no es un olvido: la marca es
+**ortogonal** al tipo — 50 dúplex están tipificados `apartment` y 13 `house`,
+y los dos grupos son dúplex reales. Fijar un tipo dejaría fuera a uno entero.
+
+Cada card trae **`is_duplex`** (`true` / `false` / `null` = no evaluado):
+conviene sellarla, sobre todo en la vertical `house`, donde el dúplex
+aparece al final de una lista de casas.
+
+⚠️ **`is_duplex` reemplaza al parche anterior.** Ya no llega
+`preferred_property_type: "apartment"` ni `semantic_query: "dúplex"` — si P1
+detectaba el dúplex mirando esos dos campos, hay que mirar `is_duplex`.
+
+*Dúplex en Rawson sigue dando 0*, y es correcto: los 3 que existen están en
+`quality_tier 0` (les falta superficie) y tier 0 no se muestra nunca. La
+consulta devuelve 0 duros + `related`.
 
 ### Qué NO debe hacer P1 (reglas duras)
 1. NO recalcular indicadores ni umbrales (todo viene precomputado).
@@ -374,17 +418,24 @@ Los nombres anteriores siguen aceptándose como alias de transición.
 | `vertical` | `sale` · `rent` · `investment` · **`temporary_rent`** |
 | `zones` | nombres de `master.zones` |
 | `property_type` | `house`, `apartment`, `land`, … (los de la card) — filtro DURO |
-| `preferred_property_type` | mismo vocabulario. Preferencia **BLANDA**: ordena, NO filtra. Sirve para **cualquier** categoría que P3 no tipifique — hoy es el dúplex (ver reglas de producto), mañana puede ser otra: el campo NO desaparece cuando P3 tipifique el dúplex. ⚠️ **P1 tiene que propagarla al paginar**: si se pierde, la página 2 cambia de ranking |
+| `preferred_property_type` | mismo vocabulario. Preferencia **BLANDA**: ordena, NO filtra. Reservado para categorías que P3 todavía no tipifique — el dúplex **dejó de usarlo el 01/09** (tiene `is_duplex`). Hoy ninguna regla lo emite; el campo sigue en el contrato |
+| `is_duplex` | **NUEVO (01/09)** `true` = SOLO dúplex, filtro **DURO** (`master.properties.es_duplex` de P3) · `false` = excluirlos · `null` = sin pronunciarse, y entonces `apartment` los trae mezclados y `house` al final. Con `true`, `property_type` va en `null` (la marca es ortogonal al tipo). P1 no lo manda: lo produce la extracción y P2 lo conserva al paginar |
+| `place` | **NUEVO (31/08)** barrio o localidad de San Juan que NO es zona del catálogo: `"Concepción"`, `"Trinidad"`, `"Marquesado"`. Filtro **DURO** por el nombre escrito en el texto del aviso (P3 no tiene columna de barrio). P1 no lo manda: lo produce la extracción y P2 lo conserva al paginar. Si ningún aviso lo nombra, la búsqueda da 0 y llega `related` |
 | `currency` | `USD` \| `ARS` (AR) · `EUR` (IT) |
 | `area_min_sqm` | m² mínimos |
 | `filters[]` | `{field, operator, value}` — `field` = nombre de la card (`pool`, `parking`, `condition`, `price_usd`, `gross_yield_pct`…) |
 | `order` | `opportunity_score` · `price_asc` · `price_desc` · `price_per_sqm_asc` · `valuation_gap_desc` · `price_percentile_asc` · `gross_yield_desc` · `days_on_market_desc` |
 
-`extraction.params` de `/search/text` viene en este vocabulario y sigue
-siendo un body válido de `/search/structured` (mecanismo de scroll).
-**Reenviarlo COMPLETO**, sin filtrar campos que P1 no reconozca: perder
-`preferred_property_type` o `semantic_query` cambia el orden de la página
-siguiente (medido: el ranking difiere desde la posición 2).
+`extraction.params` viene en este vocabulario y sigue siendo un body válido
+de `/search/structured`, pero **P1 no lo necesita para paginar** (decisión del
+30/08): el chat pagina con `{session_id, offset}` y el portal con `offset`
+sobre `/search/text`. Se ecoa para trazabilidad y debug.
+
+⚠️ Si aun así se reenvía, mandarlo **COMPLETO**: perder `is_duplex`,
+`place` o `semantic_query` cambia (o vacía) la página
+siguiente (medido: el ranking difiere desde la posición 2). Ojo también con
+`limit`/`offset` dentro de ese dict — ecoan los defaults del extractor
+(20 / 0), no lo que se pidió.
 
 ### Alquiler temporario y habitaciones (P3 handoff 27/08)
 
@@ -467,8 +518,8 @@ En SSE los errores llegan como `event: error` (el HTTP ya es 200).
 
 ## 7. Checklist de integración sugerido (fases)
 
-- **I1 — Portal**: `/search/text` + scroll (`/search/structured` +
-  `/search/semantic`) + render de Card §5 + clarificación con chips.
+- **I1 — Portal**: `/search/text` + scroll con `offset` sobre el MISMO
+  endpoint + render de Card §5 + clarificación con chips.
 - **I2 — Chat SSE**: sesión + `/search/stream` (cards → typing de
   narrativa → done) + chips + reset + related separado + paginación.
 - **I3 — Detalle**: `/property/{id}` con semáforos, score explicado y

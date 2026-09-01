@@ -94,6 +94,12 @@ export interface Card {
   id: string;
   operation: Operation;
   property_type: PropertyType;
+  /**
+   * Marca ortogonal al tipo (delta 01/09): un dúplex sigue tipificado
+   * `apartment` o `house`. Tri-estado: null = NO EVALUADO, nunca "no es" —
+   * el sello se muestra SOLO con `=== true`.
+   */
+  is_duplex?: boolean | null;
 
   /** Precio principal: SIEMPRE el original del aviso. */
   price: number;
@@ -238,8 +244,22 @@ export interface StructuredParams {
   /** Filtro DURO. */
   property_type?: PropertyType;
   /**
-   * Preferencia BLANDA: ordena, NO filtra (hoy la usa el dúplex; spec §5).
-   * Al paginar hay que reenviarla — perderla cambia el ranking de la página 2.
+   * Filtro DURO del dúplex (delta 01/09): "dúplex en rivadavia" llega como
+   * `{is_duplex: true, property_type: null}` — la marca es ortogonal al tipo.
+   * Reemplaza la aproximación anterior por `preferred_property_type` +
+   * `semantic_query`.
+   */
+  is_duplex?: boolean;
+  /**
+   * Barrio/localidad que no es zona del catálogo (delta 31/08): FILTRA por el
+   * nombre en el texto del aviso. Lo produce la extracción y P2 lo conserva
+   * al paginar — P1 nunca lo manda.
+   */
+  place?: string;
+  /**
+   * Preferencia BLANDA: ordena, NO filtra. Desde el 01/09 no la emite ninguna
+   * regla (el dúplex pasó a `is_duplex`): siempre llega null. Sigue en el
+   * contrato, reservada para la próxima categoría que P3 no tipifique.
    */
   preferred_property_type?: PropertyType;
   /** Texto libre residual de la extracción; también pesa en el ranking. */
@@ -353,7 +373,12 @@ export interface MapSearchResponse {
   pins: MapPin[];
 }
 
-/** Campos que el endpoint acepta (whitelist: el resto da 422). */
+/**
+ * Campos que el endpoint acepta (whitelist: el resto da 422).
+ * OJO: NO incluye `is_duplex` ni `place` — /search/map conservó su contrato en
+ * el delta del 01/09. Un criterio con dúplex/barrio se mapea completo solo por
+ * la forma (b) con `session_id` (la que usa la búsqueda simple).
+ */
 const MAP_REQUEST_FIELDS = [
   "vertical",
   "zones",

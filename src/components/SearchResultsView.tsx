@@ -23,7 +23,7 @@
  *     página del criterio, y con tope jamás llegaba — ver
  *     `docs/DECISION_2026-08-30_scroll-completo.md`). El criterio vive en la
  *     sesión de P2, así que nada se pierde al paginar
- *     (`preferred_property_type`, `semantic_query`).
+ *     (`is_duplex` y `place` incluidos — delta 01/09).
  *     La última página puede venir corta (p. ej. 2 cards + 10 related con 62
  *     resultados): igual se muestra entera.
  *
@@ -452,7 +452,7 @@ export default function SearchResultsView() {
     // Páginas siguientes: paginación de la sesión (`{session_id, offset}` sin
     // query) — no es un turno, no toca el estado de P2 y responde en ~100 ms
     // con SSE cards → done sin narrativa. El criterio completo vive en P2:
-    // nada que reenviar ni que poder perder (`preferred_property_type` incluido).
+    // nada que reenviar ni que poder perder (`is_duplex` y `place` incluidos).
     const myRun = runSeq.current;
     busyRef.current = true;
     setLoadingMore(true);
