@@ -81,6 +81,19 @@ export function compactPrice(card: Pick<Card, "price" | "currency">): string {
   return `${prefix}${nfCompact.format(card.price)}`;
 }
 
+/**
+ * Nombre de zona para títulos: P2 manda el código en minúsculas ("rawson",
+ * "villa krause"); acá solo se capitaliza cada palabra — no es traducción.
+ * null → "San Juan" (el mercado).
+ */
+export function zoneName(zone: string | null | undefined): string {
+  if (!zone) return "San Juan";
+  return zone
+    .split(/\s+/)
+    .map((w) => (w.length > 2 || w === zone ? w.charAt(0).toLocaleUpperCase("es-AR") + w.slice(1) : w))
+    .join(" ");
+}
+
 export function fmtDaysOnMarket(days: number): string {
   return days === 1 ? "1 día publicada" : `${nf.format(days)} días publicada`;
 }

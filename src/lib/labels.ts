@@ -67,6 +67,13 @@ export const RATING_LABEL = {
   rental_investment_rating: "Inversión: renta",
 } as const;
 
+/** Versión corta para la card (los tres chips entran en una sola fila); el `title` lleva la larga. */
+export const RATING_LABEL_SHORT: Record<keyof typeof RATING_LABEL, string> = {
+  deal_rating: "Precio",
+  resale_investment_rating: "Reventa",
+  rental_investment_rating: "Renta",
+};
+
 /** Vocabulario público del request (spec §5 — "Request"). */
 export const REQUEST_VERTICAL_LABEL: Record<string, string> = {
   sale: "Venta",

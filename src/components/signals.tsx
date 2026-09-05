@@ -16,7 +16,7 @@ export function SignalBadge({ signal }: { signal: PrimarySignal }) {
   return (
     <span className={`signal ${SIG_CLASS[signal.color]}`}>
       <span className="dot" aria-hidden />
-      {signal.text}
+      <span className="signal-text">{signal.text}</span>
     </span>
   );
 }
@@ -26,14 +26,17 @@ export function RatingChip({
   label,
   color,
   reasons,
+  title,
 }: {
   label: string;
   color: RatingColor;
   reasons: Reason[] | null;
+  /** Etiqueta completa cuando `label` es la corta de la card. */
+  title?: string;
 }) {
   return (
     <details className="rating">
-      <summary className={`signal ${SIG_CLASS[color]}`} style={{ padding: "4px 11px", fontWeight: 500 }}>
+      <summary className={`signal ${SIG_CLASS[color]}`} title={title}>
         <span className="dot" aria-hidden />
         {label}
       </summary>
@@ -65,10 +68,12 @@ export function ScoreDetails({
   return (
     <details className="score">
       <summary>
+        <span className="score-label">
+          Score <b>{score}</b>
+        </span>
         <span className="scorebar" aria-hidden>
           <span style={{ width: `${Math.max(0, Math.min(100, score))}%` }} />
         </span>
-        Score {score}
         <span className="why">¿por qué?</span>
       </summary>
       <div className="score-components">

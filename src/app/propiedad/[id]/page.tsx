@@ -20,6 +20,7 @@ import {
   miniCardPrice,
   pricePerSqm,
   secondaryPrice,
+  zoneName,
 } from "@/lib/format";
 import { SignalBadge, ratingDotStyle } from "@/components/signals";
 import { BackLink, ContactActions, DetailTracker, Gallery, MiniCardLink, SourceLinks } from "@/components/detail";
@@ -43,7 +44,7 @@ export async function generateMetadata({
   const data = await load(id).catch(() => null);
   if (!data) return { title: "Propiedad no encontrada" };
   const p = data.property;
-  const title = `${PROPERTY_TYPE_LABEL[p.property_type] ?? "Propiedad"} en ${p.zone ?? "San Juan"} · ${mainPrice(p)}`;
+  const title = `${PROPERTY_TYPE_LABEL[p.property_type] ?? "Propiedad"} en ${zoneName(p.zone)} · ${mainPrice(p)}`;
   const description =
     p.primary_signal?.text ?? p.description?.slice(0, 160) ?? "Oportunidad inmobiliaria en San Juan.";
   return {
@@ -77,7 +78,7 @@ export default async function PropertyPage({
 
   const p = data.property;
   const scoreComponents = data.score_components ?? p.score_components ?? [];
-  const title = `${PROPERTY_TYPE_LABEL[p.property_type] ?? "Propiedad"} en ${p.zone ?? "San Juan"}`;
+  const title = `${PROPERTY_TYPE_LABEL[p.property_type] ?? "Propiedad"} en ${zoneName(p.zone)}`;
   const photos = p.photos?.length ? p.photos : p.photo_url ? [p.photo_url] : [];
   const secondary = secondaryPrice(p);
   const sqm = pricePerSqm(p);

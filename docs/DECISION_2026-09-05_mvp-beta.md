@@ -110,3 +110,39 @@ avanza. Las que fallan (404 / hotlink) se siguen descartando.
 - Rotación/retención del log (`logs/` está en `.gitignore`; un archivo por día).
 - Si P2 amplía el enum de `/events` (o acepta `search_results`), ampliar el
   mapeo en `src/app/api/events/route.ts`.
+
+## Addendum 05/09 (tarde) — rediseño de las cards de resultados
+
+Pedido de German: las cards se veían desproporcionadas y descuadradas. Diagnóstico
+medido con Playwright: alturas de 698 a 955 px en la misma fila (hasta 15 chips de
+atributos, textos sin acotar) y fotos con márgenes blancos que llegan así del portal
+(`compraensanjuan` centra la foto en un lienzo 4:3 blanco, sin CORS → no se puede
+detectar ni recortar en el browser). Cambios en `PropertyCard.tsx`, `signals.tsx` y el
+bloque Card de `globals.css`:
+
+- **Foto 4:3 sobre passe-partout lila** con `mix-blend-mode: multiply`: el blanco del
+  lienzo se vuelve lila (deja de verse blanco-sobre-blanco); las luces de la foto real
+  apenas se tiñen. Zoom suave al hover. Sellos "Similar" y "Dúplex" sobre la foto.
+- **Todo lo variable acotado**: título y dirección en 1 línea, señal y contexto de
+  mercado en 2, **hasta 4 chips + "+N"** (expande al click). Alturas medidas después:
+  653–711 px, y el grid las iguala por fila.
+- Jerarquía: precio serif + "≈ US$ · US$/m²" en una línea debajo, título, ficha
+  técnica (ambientes/dormitorios/baños/m²) en tinta, dirección en gris, señal a ancho
+  completo, fila de score (`Score 100` + barra + "¿por qué?"), ratings, chips,
+  contexto, pie con fuente · publicante · días y "Ver aviso ↗".
+- Zona capitalizada en títulos (`zoneName`: "rawson" → "Rawson"; no es traducción).
+- Grid `minmax(320px)`: 2 columnas con mapa, 3 sin mapa, 1 en mobile.
+- El sello "Similar" muestra el porcentaje solo si `relevance_score` ≤ 1 (P2 mandó
+  1,04 en una related).
+
+### Paso 1 (05/09, noche) — altura uniforme, medida
+
+German: "las cards no tienen el mismo alto". El grid igualaba por fila, no entre filas.
+Ahora cada bloque de la card es una **ranura de alto fijo que se renderiza aunque el
+dato falte** (vacía e invisible): precio 46 px (2 líneas), título 21, ficha 19,
+dirección 18, señal 50 (2 líneas, texto acotado), score 20, ratings 26 (una fila, con
+etiquetas cortas "Precio · Reventa · Renta" y la larga en `title`), chips 54 (2 filas,
+3 + "+N"), contexto 37 (2 líneas), pie 30. Solo crece lo que el usuario abre (¿por qué?,
+reasons, +N). Medido con Playwright sobre 30 cards por layout: **una sola altura** —
+686 px con mapa (2 col.), 690 sin mapa (3 col.), 686 en alquiler, 689 en mobile.
+Pendiente el paso 2: la estética.

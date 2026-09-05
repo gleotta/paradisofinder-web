@@ -637,8 +637,8 @@ img {
 
 .cards-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 18px;
   margin-top: 18px;
 }
 
@@ -656,28 +656,37 @@ img {
 }
 
 /* ============================== Card ============================== */
+/* Rediseño 05/09: todo lo variable acotado (título y dirección en 1 línea,
+   señal y contexto en 2, hasta 4 chips + "+N") para que las cards de una
+   fila queden parejas; foto sobre passe-partout lila. */
 
 .pcard {
   background: var(--white);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: 16px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  transition: box-shadow 0.15s ease, transform 0.15s ease;
   position: relative;
+  box-shadow: 0 1px 2px rgba(58, 15, 98, 0.05);
+  transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
 }
 
 .pcard:hover {
   box-shadow: var(--shadow-hover);
   transform: translateY(-2px);
+  border-color: var(--pastel-3);
 }
 
+/* Los portales mandan las fotos con márgenes blancos (foto vertical centrada
+   en un lienzo 4:3). `multiply` convierte ese blanco en el fondo lila — deja
+   de verse blanco-sobre-blanco — y apenas tiñe las luces de la foto real. */
 .pcard-photo {
   position: relative;
-  aspect-ratio: 3 / 2;
-  background: linear-gradient(135deg, var(--pastel-2), var(--pastel-3));
+  aspect-ratio: 4 / 3;
+  background: linear-gradient(160deg, #f1e9f6 0%, #e4d8ee 100%);
   overflow: hidden;
+  isolation: isolate;
 }
 
 .pcard-photo > a {
@@ -687,61 +696,87 @@ img {
 }
 
 .pcard-photo img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  mix-blend-mode: multiply;
+  transition: transform 0.35s ease;
 }
 
-.pcard-photo .sim-badge {
+.pcard:hover .pcard-photo img {
+  transform: scale(1.03);
+}
+
+.pcard-badges {
   position: absolute;
   top: 10px;
   left: 10px;
-  background: var(--purple-deep);
-  color: var(--white);
+  display: flex;
+  gap: 6px;
+  z-index: 1;
+}
+
+.pbadge {
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--purple-deep);
   font-size: 12px;
+  font-weight: 600;
   border-radius: 999px;
   padding: 3px 10px;
-  opacity: 0.94;
+  box-shadow: 0 1px 3px rgba(36, 16, 50, 0.15);
+}
+
+.pbadge--sim {
+  background: var(--purple-deep);
+  color: var(--white);
 }
 
 .pcard-body {
-  padding: 16px 18px 14px;
+  padding: 14px 16px 12px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 7px;
   flex: 1;
 }
 
-.pcard-pricerow {
+/* Ranuras de alto fijo (altura uniforme, 05/09): cada bloque mide lo mismo
+   tenga o no dato; solo crece lo que el usuario abre. */
+.pcard-pricebox {
   display: flex;
-  align-items: baseline;
-  gap: 10px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 1px;
+  min-height: 46px;
 }
 
 .pcard-price {
   font-family: var(--display);
-  font-size: 24px;
+  font-size: 23px;
   font-weight: 700;
   color: var(--purple);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
 }
 
-.pcard-price-sec {
-  color: var(--muted);
-  font-size: 14px;
-}
-
-.pcard-sqm {
-  margin-left: auto;
+.pcard-price-refs {
   color: var(--muted);
   font-size: 13px;
+  min-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .pcard-title {
   font-size: 16px;
   font-weight: 600;
-  margin: 0;
+  margin: 2px 0 0;
   color: var(--ink);
+  line-height: 1.3;
+  height: 21px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .pcard-title a {
@@ -763,46 +798,104 @@ img {
 .pcard .signal,
 .pcard .ratings-row,
 .pcard .pcard-foot,
-.pcard details {
+.pcard details,
+.pcard .attr--more {
   position: relative;
   z-index: 1;
 }
 
-.pcard-address,
 .pcard-specs {
-  color: var(--muted);
+  color: var(--ink);
   font-size: 13.5px;
+  font-weight: 500;
   margin: 0;
+  height: 19px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pcard-address {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+  height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.slot-empty--signal {
+  height: 50px;
+  margin-top: 2px;
+}
+
+.slot-empty--score {
+  height: 20px;
 }
 
 .market-context {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12.5px;
+  line-height: 1.45;
   font-style: italic;
   border-left: 3px solid var(--pastel-3);
   padding-left: 10px;
   margin: 2px 0 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pcard .market-context {
+  height: 37px;
+}
+
+.market-context--empty {
+  visibility: hidden;
 }
 
 /* --- señal principal --- */
 
 .signal {
   display: inline-flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   border-radius: 10px;
-  padding: 7px 12px;
-  font-size: 13.5px;
+  padding: 7px 11px;
+  font-size: 13px;
   font-weight: 600;
+  line-height: 1.35;
   width: fit-content;
   max-width: 100%;
 }
 
 .signal .dot {
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   border-radius: 999px;
   flex: none;
+  margin-top: 5px;
+}
+
+/* en la card ocupa el ancho, mide 2 líneas fijas y el texto se acota a 2 */
+.pcard-body > .signal {
+  width: 100%;
+  height: 50px;
+  margin-top: 2px;
+  align-items: center;
+}
+
+.pcard-body > .signal .dot {
+  margin-top: 0;
+}
+
+.pcard-body > .signal .signal-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .sig--green {
@@ -836,12 +929,21 @@ img {
 
 .ratings-row {
   display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  height: 26px;
+  overflow: hidden;
+}
+
+/* al abrir las reasons de un rating, la fila crece (acción del usuario) */
+.ratings-row:has(details[open]) {
+  height: auto;
   flex-wrap: wrap;
-  gap: 8px;
+  overflow: visible;
 }
 
 details.rating {
-  font-size: 12.5px;
+  font-size: 12px;
 }
 
 details.rating summary {
@@ -850,7 +952,8 @@ details.rating summary {
   align-items: center;
   gap: 6px;
   border-radius: 999px;
-  padding: 4px 11px;
+  padding: 3px 10px;
+  font-weight: 500;
   cursor: pointer;
   user-select: none;
   border: 1px solid transparent;
@@ -864,6 +967,7 @@ details.rating summary .dot {
   width: 7px;
   height: 7px;
   border-radius: 999px;
+  margin-top: 0;
 }
 
 details.rating[open] summary {
@@ -894,12 +998,20 @@ details.score {
   font-size: 13px;
 }
 
+.pcard details.score {
+  height: 20px;
+}
+
+.pcard details.score[open] {
+  height: auto;
+}
+
 details.score summary {
   list-style: none;
   cursor: pointer;
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   color: var(--purple);
   font-weight: 600;
   user-select: none;
@@ -909,15 +1021,27 @@ details.score summary::-webkit-details-marker {
   display: none;
 }
 
+details.score summary .score-label {
+  white-space: nowrap;
+}
+
+details.score summary .score-label b {
+  font-size: 15px;
+  font-weight: 700;
+}
+
 details.score summary .why {
+  margin-left: auto;
   font-weight: 400;
   color: var(--muted);
   font-size: 12.5px;
   text-decoration: underline dotted;
+  white-space: nowrap;
 }
 
 .scorebar {
-  width: 74px;
+  flex: 1;
+  max-width: 140px;
   height: 6px;
   background: var(--line);
   border-radius: 999px;
@@ -954,14 +1078,31 @@ details.score summary .why {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  align-content: flex-start;
+}
+
+/* 2 filas fijas de chips (24 + 6 + 24); "+N" las abre */
+.pcard .attr-chips {
+  height: 54px;
+  overflow: hidden;
+}
+
+.pcard .attr-chips--open {
+  height: auto;
 }
 
 .attr {
+  box-sizing: border-box;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
   background: var(--lilac);
   border-radius: 999px;
   font-size: 12px;
-  padding: 3px 10px;
+  line-height: 1;
+  padding: 0 10px;
   color: var(--purple-deep);
+  white-space: nowrap;
 }
 
 .attr--soft {
@@ -971,22 +1112,44 @@ details.score summary .why {
   font-style: italic;
 }
 
+.attr--more {
+  background: var(--white);
+  border: 1px solid var(--line);
+  color: var(--purple);
+  font-weight: 600;
+  font-family: var(--body);
+  cursor: pointer;
+}
+
+.attr--more:hover {
+  border-color: var(--purple);
+}
+
 /* --- pie de card --- */
 
 .pcard-foot {
   margin-top: auto;
   padding-top: 10px;
   border-top: 1px solid var(--line);
+  height: 30px;
+  box-sizing: content-box;
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
   font-size: 12.5px;
   color: var(--muted);
 }
 
+.pcard-foot-meta {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .pcard-foot .source-link {
-  margin-left: auto;
+  flex: none;
   color: var(--magenta);
   font-weight: 600;
 }
