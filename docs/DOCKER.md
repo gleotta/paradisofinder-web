@@ -222,5 +222,5 @@ docker builder prune                    # caché de build (opcional)
 Railway construye este mismo `Dockerfile` desde el repo (no usa `docker-compose.yml`):
 variables en el dashboard, volumen montado en `/data`, healthcheck `/api/health`. Todo eso
 está en `docs/DEPLOY_RAILWAY.md`. Diferencias con local: `P2_BASE_URL` apunta a la red
-privada de Railway (`http://<p2>.railway.internal:8000`, y P2 debe escuchar en `::`), y
+privada de Railway (`http://paradisofinder-core.railway.internal:8000`; en los entornos de Railway posteriores al 16/10/2025 la red privada es IPv4 + IPv6, P2 no necesita escuchar en `::`), y
 `P2_API_KEY` es obligatoria.

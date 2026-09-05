@@ -9,7 +9,8 @@ dos registros de decisión que revierten cosas de esos documentos:
 El primer MVP (beta, analítica propia, botón de publicar, detalle en pestaña nueva,
 galería completa) está en `docs/DECISION_2026-09-05_mvp-beta.md`. Para correrla en Docker
 (instalar, construir, operar, leer logs): `docs/DOCKER.md`; para el deploy en Railway:
-`docs/DEPLOY_RAILWAY.md`.
+`docs/DEPLOY_RAILWAY.md`; el CI/CD local por hooks de git (`develop` → Docker del :3000,
+`stage` → Railway): `docs/CI_CD.md`.
 
 Hay dos formas de correr P1 en esta máquina, y usan el mismo puerto (3000), así que no
 conviven:
@@ -197,6 +198,8 @@ se eliminó de P1 el 30/08: `related` viene resuelto (`docs/CAMBIOS_P2_PARA_P1_2
 | `Dockerfile` + `docker-entrypoint.sh` + `.dockerignore` | Imagen standalone no-root (`docs/DOCKER.md`): volumen `/data` para el log, healthcheck `/api/health` |
 | `docker-compose.yml` | Correr esa imagen en local contra el P2 del Docker (puerto 3000, volumen `pfw-data`) |
 | `railway.json` | Deploy en Railway (`docs/DEPLOY_RAILWAY.md`): builder Dockerfile, healthcheck, restart |
+| `scripts/git-hooks/` + `scripts/ci/` | CI/CD local por hooks versionados (`docs/CI_CD.md`): `develop` → guardias + rebuild del :3000; push a `stage` → gate bloqueante, artefacto verificado y smoke del stage de Railway |
+| `scripts/actualizar_3000.sh` · `scripts/deploy_verify.sh` · `scripts/ci/smoke.mjs` | Rebuild del Docker local con smoke · verificación de la imagen en un contenedor aislado (:3002) · el smoke común (health, `P2_MODE=live`, SSE real, cruce de `total_matches` con P2) |
 | `src/proxy.ts` + `next.config.ts` | Hardening HTTP: CSP con nonce por request, HSTS, nosniff, X-Frame-Options, Permissions-Policy |
 | `src/app/api/health/` | Healthcheck (`?deep=1` sondea P2) |
 | `src/components/PublishCta.tsx` + `src/lib/server/contact.ts` | Botón "Publicá tu propiedad" (WhatsApp, `CONTACT_WHATSAPP`) |
@@ -258,12 +261,34 @@ jq -c 'select(.event=="card_clicked") | [.search_id,.payload.rank,.payload.score
 ## Deploy en Railway (Docker)
 
 Runbook completo en `docs/DEPLOY_RAILWAY.md`. Resumen: Railway construye el `Dockerfile`
-(Next `output: "standalone"`, usuario no-root, `HOSTNAME=::` dual-stack, `P2_MODE=live`),
-lee `railway.json` (healthcheck `/api/health`, restart on failure) y las variables van en
-el dashboard: `P2_BASE_URL` (red privada `http://<p2>.railway.internal:8000` — P2 debe
-escuchar en `::`), `P2_API_KEY`, `CONTACT_WHATSAPP`. Montar un volumen en `/data` para que
-el log de eventos sobreviva a los deploys; se lee con `railway ssh -- cat /data/logs/*.jsonl`.
-La imagen es la misma que corre `docker compose up -d` en local (`docs/DOCKER.md`).
+(Next `output: "standalone"`, usuario no-root, `HOSTNAME=::` dual-stack, `P2_MODE=live`)
+desde la rama **`stage`** (integración de GitHub), lee `railway.json` (healthcheck
+`/api/health`, restart on failure) y las variables van en el dashboard: `P2_BASE_URL`
+(`http://paradisofinder-core.railway.internal:8000`, la red privada de Railway, que en entornos
+creados después del 16/10/2025 es IPv4 + IPv6, así que el `--host 0.0.0.0` de P2 alcanza;
+plan B la URL pública `https://paradisofinder-core-staging.up.railway.app`),
+`P2_API_KEY` (la `PORTAL_API_KEY` del stage de P2), `CONTACT_WHATSAPP`. Montar un volumen en
+`/data` para que el log de eventos sobreviva a los deploys; se lee con
+`railway ssh -- cat /data/logs/*.jsonl`. La imagen es la misma que corre
+`docker compose up -d` en local (`docs/DOCKER.md`). El handoff de P2 con lo que ya está
+de su lado: `docs/HANDOFF_P2_CICD_2026-09-05.md`.
+
+## CI/CD local (hooks de git)
+
+`docs/CI_CD.md`. Se enchufa una vez con `./scripts/ci/install_hooks.sh` (apunta
+`core.hooksPath` a `scripts/git-hooks/`, versionado) y de ahí en más:
+
+| evento | qué pasa |
+|---|---|
+| commit / merge / push en `develop` | lint + tsc + `next build` (~16 s) y, si dan verde, `docker compose up -d --build` del :3000 con espera de healthy y smoke. En segundo plano; avisa por notificación. |
+| commit en `stage` | las mismas guardias, feedback nomás |
+| push a `stage` | **gate bloqueante** (las guardias: si dan rojo el push no sale; `--no-verify` lo saltea) → Railway promueve desde GitHub → en local se verifica la misma imagen de un worktree limpio del commit (`scripts/deploy_verify.sh`, :3002) y se hace el smoke contra la URL de stage hasta que sirva ese commit |
+
+El smoke (`scripts/ci/smoke.mjs`) falla ante degradación silenciosa: exige `P2_MODE=live`,
+que P1 llegue a P2, una búsqueda real por sesión + SSE con cards que no sean las de `/mocks`
+y el mismo `total_matches` que P2 ("casas en rawson" → 180). Estado y logs:
+`./scripts/ci/cd_status.sh`; todo vive en `.ci/` (gitignored). Falta cargar en `.ci/config`
+la `STAGE_BASE_URL` del stage de P1 cuando exista el servicio en Railway.
 
 ## Consultas para probar (contra P2 real)
 

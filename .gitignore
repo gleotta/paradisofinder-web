@@ -43,3 +43,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 !.env.example
+
+# CI/CD local (logs, estado, reportes, worktrees de verificación y config por máquina)
+/.ci/
