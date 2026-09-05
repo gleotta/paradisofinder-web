@@ -497,8 +497,27 @@ export type SSEEventName =
 /* Eventos — spec §4                                                   */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Enum CERRADO de `event_type` de P2 (Swagger vivo, verificado 05/09): cualquier
+ * otro valor da 422, igual que un `session_id` que no sea el UUID de una sesión.
+ * El mapeo desde los eventos propios de P1 vive en `src/app/api/events/route.ts`.
+ */
+export type P2EventType =
+  | "session_created"
+  | "search_executed"
+  | "nivel1_shown"
+  | "refinement_applied"
+  | "card_clicked"
+  | "outbound_click"
+  | "detail_viewed"
+  | "empty_results"
+  | "tipologia_fuera_alcance"
+  | "agency_ingest";
+
 export interface TrackEventBody {
+  /** UUID de sesión de P2 (patrón `^[0-9a-f-]{36}$`). */
   session_id: string;
-  event_type: string;
+  event_type: P2EventType;
+  /** ≤ 4 KB. */
   payload: Record<string, unknown>;
 }

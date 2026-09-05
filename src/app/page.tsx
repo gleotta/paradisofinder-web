@@ -1,4 +1,6 @@
 import SearchHero from "@/components/SearchHero";
+import PublishCta from "@/components/PublishCta";
+import { publishWhatsAppHref } from "@/lib/server/contact";
 
 /**
  * Pantalla 1 — Home (producto §3, ajustada por el cambio del 29/08:
@@ -9,6 +11,7 @@ import SearchHero from "@/components/SearchHero";
  * desde el 01/09 (`docs/DECISION_2026-09-01_selector-vertical.md`): queda como
  * preferencia, pero lo que escribe el usuario predomina y re-sincroniza el
  * botón. Sin selección, P2 infiere del texto como antes.
+ * Debajo, el bloque para inmobiliarias/dueños que quieran publicar (05/09).
  */
 export default function HomePage() {
   return (
@@ -23,6 +26,9 @@ export default function HomePage() {
         </p>
         <SearchHero />
       </section>
+      <div className="container">
+        <PublishCta href={publishWhatsAppHref()} variant="home" />
+      </div>
     </main>
   );
 }

@@ -1,0 +1,28 @@
+# P1 en Docker local, contra el P2 del Docker de esta máquina (puerto 8000).
+#   docker compose up -d --build     # construir + arrancar
+#   docker compose logs -f           # ver logs
+#   docker compose down              # parar (el volumen pfw-data queda)
+# Mismo Dockerfile que Railway; runbook en docs/DEPLOY_RAILWAY.md.
+services:
+  web:
+    build: .
+    image: paradisofinder-web:latest
+    container_name: paradisofinder-web
+    ports:
+      - "3000:3000"
+    environment:
+      # Dentro del container "localhost" es el propio container: P2 se alcanza por el host.
+      P2_BASE_URL: http://host.docker.internal:8000
+      P2_API_KEY: ${P2_API_KEY:-}
+      P2_MODE: live
+      # Botón "Publicá tu propiedad": exportar CONTACT_WHATSAPP en el shell o en un .env junto a este archivo.
+      CONTACT_WHATSAPP: ${CONTACT_WHATSAPP:-}
+      EVENTS_LOG_DIR: /data/logs
+    volumes:
+      - pfw-data:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  pfw-data:

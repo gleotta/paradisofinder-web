@@ -22,7 +22,7 @@ import {
   secondaryPrice,
   specsLine,
 } from "@/lib/format";
-import { EVENTS, trackEvent } from "@/lib/track";
+import { detailHref, EVENTS, trackCardClick, trackEvent, type CardOrigin } from "@/lib/track";
 import { RatingChip, ScoreDetails, SignalBadge } from "./signals";
 
 /**
@@ -34,11 +34,23 @@ import { RatingChip, ScoreDetails, SignalBadge } from "./signals";
 function PropertyCardBase({
   card,
   similar = false,
+  searchId = null,
+  rank = null,
 }: {
   card: Card;
   similar?: boolean;
+  /** Corrida de búsqueda que la mostró (analítica); viaja al detalle por la URL. */
+  searchId?: string | null;
+  /** Posición en el listado (1 = primera), o en el bloque de similares. */
+  rank?: number | null;
 }) {
   const [photoFailed, setPhotoFailed] = useState(false);
+  // El detalle abre en pestaña NUEVA (decisión 05/09) y hereda el contexto de
+  // la búsqueda por la URL (`?s=&r=`); el click se registra acá, en la pestaña
+  // que conoce la consulta, el ranking y el score.
+  const from: CardOrigin = similar ? "related" : "list";
+  const href = detailHref(card.id, { searchId, rank, from });
+  const onOpen = () => trackCardClick(card, from, rank);
   const isRoom = card.property_type === "room";
   const title = `${PROPERTY_TYPE_LABEL[card.property_type] ?? "Propiedad"} en ${card.zone ?? "San Juan"}`;
   const secondary = secondaryPrice(card);
@@ -65,12 +77,14 @@ function PropertyCardBase({
   return (
     <article className="pcard">
       <div className="pcard-photo">
-        {card.photo_url && !photoFailed ? (
-          // Las fotos vienen de portales arbitrarios: <img> plano, sin whitelist de dominios.
-          // Con datos reales varias 404 o bloquean el hotlink → se cae al degradado.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={card.photo_url} alt={title} loading="lazy" onError={() => setPhotoFailed(true)} />
-        ) : null}
+        <Link href={href} target="_blank" rel="noopener" onClick={onOpen} tabIndex={-1} aria-hidden>
+          {card.photo_url && !photoFailed ? (
+            // Las fotos vienen de portales arbitrarios: <img> plano, sin whitelist de dominios.
+            // Con datos reales varias 404 o bloquean el hotlink → se cae al degradado.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={card.photo_url} alt="" loading="lazy" onError={() => setPhotoFailed(true)} />
+          ) : null}
+        </Link>
         {similar && (
           <span className="sim-badge">
             {card.relevance_score != null
@@ -87,10 +101,10 @@ function PropertyCardBase({
           {sqm && <span className="pcard-sqm">{sqm}</span>}
         </div>
 
-        {/* La apertura de detalle se trackea en el mount de la página de detalle
-            (cubre también entradas directas por URL, sin doble conteo). */}
         <h3 className="pcard-title">
-          <Link href={`/propiedad/${encodeURIComponent(card.id)}`}>{title}</Link>
+          <Link href={href} target="_blank" rel="noopener" onClick={onOpen}>
+            {title}
+          </Link>
         </h3>
         {card.address && <p className="pcard-address">{card.address}</p>}
         {specs && <p className="pcard-specs">{specs}</p>}

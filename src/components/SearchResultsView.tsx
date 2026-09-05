@@ -45,7 +45,7 @@ import type {
   Summary,
 } from "@/lib/p2/types";
 import { readSSE } from "@/lib/sse";
-import { EVENTS, setTrackingSession, trackEvent } from "@/lib/track";
+import { cardsDigest, EVENTS, scoreStats, searchIdFor, setTrackingSearch, trackEvent } from "@/lib/track";
 import { fmtInt } from "@/lib/format";
 import {
   isVerticalId,
@@ -85,6 +85,8 @@ function runKey(q: string, v: VerticalId | null): string {
 
 interface ResultsState {
   query: string;
+  /** Id de la corrida (`<session>.<turno>`) — viaja a las cards para la analítica. */
+  searchId: string;
   /**
    * Todo lo recibido: el turno manda 20 de una, así que las 10 que sobran
    * quedan de buffer para la página 2 (sin red).
@@ -110,6 +112,8 @@ interface RunOpts {
   override?: string;
   keepSession?: boolean;
   vertical?: VerticalId | null;
+  /** Origen de la corrida (analítica): búsqueda nueva o refinamiento en sesión. */
+  mode?: "search" | "chip" | "suggestion" | "vertical";
 }
 
 export default function SearchResultsView() {
@@ -142,6 +146,8 @@ export default function SearchResultsView() {
 
   const processedQuery = useRef<string | null>(null);
   const sessionRef = useRef<string | null>(null);
+  /** Turno dentro de la sesión de P2: cada corrida tiene su `search_id`. */
+  const turnRef = useRef(0);
   const seenIds = useRef<Set<string>>(new Set());
   const mapKey = useRef<string | null>(null);
   const busyRef = useRef(false);
@@ -180,12 +186,12 @@ export default function SearchResultsView() {
         flushHandle.current = null;
       }
       lastRun.current = { query, opts };
-      trackEvent(EVENTS.SEARCH, {
-        mode: "search",
+      const searchMeta = {
+        mode: opts?.mode ?? "search",
         query,
-        vertical_override: opts?.override,
         vertical: opts?.vertical ?? null,
-      });
+        vertical_override: opts?.override ?? null,
+      };
 
       if (!opts?.keepSession) {
         // Búsqueda nueva = sesión nueva: sin memoria de la anterior.
@@ -197,16 +203,35 @@ export default function SearchResultsView() {
       }
 
       try {
-        if (!sessionRef.current) {
+        const openSession = async (): Promise<string | null> => {
           const sres = await fetch("/api/sessions", { method: "POST" });
-          if (!sres.ok) {
-            setError({ text: "No pude iniciar la búsqueda. Probá de nuevo.", canRetry: true });
-            return;
-          }
+          if (!sres.ok) return null;
           const sdata = (await sres.json()) as { session_id: string };
           sessionRef.current = sdata.session_id;
-          setTrackingSession(sdata.session_id);
+          turnRef.current = 0;
+          return sdata.session_id;
+        };
+        /**
+         * Cada corrida es un turno de la sesión y tiene su `search_id`
+         * (`<session>.<turno>`): es la clave que une consulta → resultados →
+         * qué se abrió en la analítica (`docs/DECISION_2026-09-05_mvp-beta.md`).
+         */
+        const beginTurn = (sessionId: string, extra: Record<string, unknown> = {}) => {
+          turnRef.current += 1;
+          const id = searchIdFor(sessionId, turnRef.current);
+          setTrackingSearch(sessionId, id);
+          trackEvent(EVENTS.SEARCH, { ...searchMeta, ...extra });
+          return id;
+        };
+
+        let sessionId = sessionRef.current ?? (await openSession());
+        if (!sessionId) {
+          trackEvent(EVENTS.SEARCH_ERROR, { ...searchMeta, stage: "session" });
+          setError({ text: "No pude iniciar la búsqueda. Probá de nuevo.", canRetry: true });
+          return;
         }
+        let searchId = beginTurn(sessionId);
+        const t0 = performance.now();
 
         const send = (sessionId: string) =>
           fetch("/api/search/stream", {
@@ -223,20 +248,25 @@ export default function SearchResultsView() {
             }),
           });
 
-        let res = await send(sessionRef.current);
+        let res = await send(sessionId);
         // 404 = sesión expirada → abrir otra y reintentar (spec §3).
         if (res.status === 404) {
-          const sres = await fetch("/api/sessions", { method: "POST" });
-          if (sres.ok) {
-            const sdata = (await sres.json()) as { session_id: string };
-            sessionRef.current = sdata.session_id;
-            setTrackingSession(sdata.session_id);
-            res = await send(sdata.session_id);
+          const fresh = await openSession();
+          if (fresh) {
+            sessionId = fresh;
+            searchId = beginTurn(fresh, { retry: "session_expired" });
+            res = await send(fresh);
           }
         }
 
         if (!res.ok || !res.body) {
           const body = (await res.json().catch(() => null)) as { error?: string } | null;
+          trackEvent(EVENTS.SEARCH_ERROR, {
+            ...searchMeta,
+            stage: "stream",
+            status: res.status,
+            message: body?.error ?? null,
+          });
           setError({
             text: body?.error ?? "Error interno. Probá de nuevo en un momento.",
             canRetry: res.status !== 422,
@@ -255,6 +285,7 @@ export default function SearchResultsView() {
               for (const c of ev.related?.cards ?? []) seenIds.current.add(c.id);
               setResults({
                 query,
+                searchId,
                 cards: ev.cards,
                 visibleCards: Math.min(PAGE_SIZE, ev.cards.length),
                 totalMatches: ev.total_matches,
@@ -283,11 +314,36 @@ export default function SearchResultsView() {
               // botón bloqueados ~2 s de más mientras se escribía el resumen.
               setSearching(false);
               busyRef.current = false;
-              if (ev.total_matches === 0) trackEvent(EVENTS.ZERO_RESULTS, { mode: "search", query });
+              // El "resultado" de la consulta para la analítica: total real,
+              // scores y ranking de la página (ids + score), latencia hasta las cards.
+              trackEvent(EVENTS.SEARCH_RESULTS, {
+                query,
+                total_matches: ev.total_matches,
+                received: ev.cards.length,
+                summary: ev.summary
+                  ? {
+                      vertical: ev.summary.vertical,
+                      zone: ev.summary.zone,
+                      property_type: ev.summary.property_type,
+                      budget: ev.summary.budget,
+                      order: ev.summary.order,
+                      assumption_note: ev.summary.assumption_note,
+                    }
+                  : null,
+                scores: scoreStats(ev.cards),
+                results: cardsDigest(ev.cards),
+                related_count: ev.related?.count ?? 0,
+                suggestions: ev.suggestions ?? null,
+                latency_ms: Math.round(performance.now() - t0),
+              });
+              if (ev.total_matches === 0) {
+                trackEvent(EVENTS.ZERO_RESULTS, { query, suggestions: ev.suggestions ?? null });
+              }
               if (ev.related) {
                 trackEvent(EVENTS.RELATED_SHOWN, {
                   reason: ev.related.reason,
                   count: ev.related.count,
+                  results: cardsDigest(ev.related.cards),
                 });
               }
               break;
@@ -309,7 +365,12 @@ export default function SearchResultsView() {
             case "clarification": {
               const ev = JSON.parse(data) as ClarificationEvent;
               const repeat = !!opts?.override;
-              trackEvent(EVENTS.CLARIFICATION_SHOWN, { mode: "search", query, repeat });
+              trackEvent(EVENTS.CLARIFICATION_SHOWN, {
+                query,
+                repeat,
+                reason: ev.clarification_reason,
+                chips: ev.chips,
+              });
               setResults(null);
               setClarification({
                 message: ev.message,
@@ -320,6 +381,7 @@ export default function SearchResultsView() {
             }
             case "error": {
               const ev = JSON.parse(data) as StreamErrorEvent;
+              trackEvent(EVENTS.SEARCH_ERROR, { ...searchMeta, stage: "sse", message: ev.message });
               setError({ text: ev.message, canRetry: true });
               break;
             }
@@ -333,6 +395,7 @@ export default function SearchResultsView() {
       } catch {
         // Un abort es una búsqueda nueva pisando a la anterior, no un fallo.
         if (isCurrent() && !ac.signal.aborted) {
+          trackEvent(EVENTS.SEARCH_ERROR, { ...searchMeta, stage: "network" });
           setError({ text: "Se cortó la conexión con el buscador. Probá de nuevo.", canRetry: true });
         }
       } finally {
@@ -411,9 +474,9 @@ export default function SearchResultsView() {
 
       if (v && results && sessionRef.current) {
         if (v === "invertir") {
-          void runSearch(VERTICAL_PHRASE.invertir, { keepSession: true });
+          void runSearch(VERTICAL_PHRASE.invertir, { keepSession: true, mode: "vertical" });
         } else {
-          void runSearch(urlQuery, { override: v, keepSession: true });
+          void runSearch(urlQuery, { override: v, keepSession: true, mode: "vertical" });
         }
         // La URL acompaña (link compartible / back reproducible) sin relanzar
         // el efecto: la clave ya se marca como procesada.
@@ -438,7 +501,12 @@ export default function SearchResultsView() {
     // Página 2: ya está en memoria (el turno mandó 20). Sin red, sin spinner.
     if (r.visibleCards < r.cards.length) {
       const next = Math.min(r.cards.length, r.visibleCards + PAGE_SIZE);
-      trackEvent(EVENTS.PAGE_LOADED, { offset: r.visibleCards, kind: "buffer" });
+      trackEvent(EVENTS.PAGE_LOADED, {
+        offset: r.visibleCards,
+        kind: "buffer",
+        total_matches: r.totalMatches,
+        results: cardsDigest(r.cards.slice(r.visibleCards, next), r.visibleCards),
+      });
       setResults((prev) => (prev ? { ...prev, visibleCards: next } : prev));
       return;
     }
@@ -473,9 +541,18 @@ export default function SearchResultsView() {
         const fresh = ev.cards.filter((c) => !seenIds.current.has(c.id));
         for (const c of fresh) seenIds.current.add(c.id);
         for (const c of ev.related?.cards ?? []) seenIds.current.add(c.id);
-        trackEvent(EVENTS.PAGE_LOADED, { offset: r.cards.length, kind: "session" });
+        trackEvent(EVENTS.PAGE_LOADED, {
+          offset: r.cards.length,
+          kind: "session",
+          total_matches: ev.total_matches,
+          results: cardsDigest(fresh, r.cards.length),
+        });
         if (ev.related) {
-          trackEvent(EVENTS.RELATED_SHOWN, { reason: ev.related.reason, count: ev.related.count });
+          trackEvent(EVENTS.RELATED_SHOWN, {
+            reason: ev.related.reason,
+            count: ev.related.count,
+            results: cardsDigest(ev.related.cards),
+          });
         }
         setResults((prev) =>
           prev
@@ -571,7 +648,7 @@ export default function SearchResultsView() {
         setVertical(lower);
         storeVertical(lower);
       }
-      void runSearch(urlQuery, { override: OVERRIDE_BY_CHIP[lower] ?? lower, keepSession: true });
+      void runSearch(urlQuery, { override: OVERRIDE_BY_CHIP[lower] ?? lower, keepSession: true, mode: "chip" });
     },
     [runSearch, urlQuery],
   );
@@ -579,8 +656,7 @@ export default function SearchResultsView() {
   /** `suggestions` de P2: acciones sobre el criterio del turno → misma sesión. */
   const handleSuggestion = useCallback(
     (s: string) => {
-      trackEvent(EVENTS.SEARCH, { mode: "suggestion", query: s });
-      void runSearch(s, { keepSession: true });
+      void runSearch(s, { keepSession: true, mode: "suggestion" });
     },
     [runSearch],
   );
@@ -745,14 +821,14 @@ export default function SearchResultsView() {
 
         {results && results.visibleCards > 0 && (
           <div className="cards-grid">
-            {results.cards.slice(0, results.visibleCards).map((card) => (
+            {results.cards.slice(0, results.visibleCards).map((card, i) => (
               <div
                 key={card.id}
                 id={`pcard-${card.id}`}
                 className={`map-card-wrap${selectedId === card.id ? " is-active" : ""}`}
                 onMouseEnter={mapSplit ? () => setSelectedId(card.id) : undefined}
               >
-                <PropertyCard card={card} />
+                <PropertyCard card={card} searchId={results.searchId} rank={i + 1} />
               </div>
             ))}
           </div>
@@ -785,8 +861,8 @@ export default function SearchResultsView() {
                   : "Se parecen a lo que pedís, aunque no cumplen todos los filtros."}
               </p>
               <div className="cards-grid">
-                {results.related.cards.map((card) => (
-                  <PropertyCard key={card.id} card={card} similar />
+                {results.related.cards.map((card, i) => (
+                  <PropertyCard key={card.id} card={card} similar searchId={results.searchId} rank={i + 1} />
                 ))}
               </div>
             </>
@@ -812,7 +888,7 @@ export default function SearchResultsView() {
           <button type="button" className="map-close" onClick={toggleMapOverlay}>
             ✕ Cerrar mapa
           </button>
-          <ResultsMap pins={pins} selectedId={selectedId} onSelect={handleMapSelect} />
+          <ResultsMap pins={pins} selectedId={selectedId} onSelect={handleMapSelect} searchId={results.searchId} />
         </aside>
       )}
 

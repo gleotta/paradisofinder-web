@@ -113,7 +113,38 @@ img {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   height: 64px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* MVP beta (05/09): etiqueta junto a la marca en todas las pantallas */
+.beta-tag {
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.5;
+  color: var(--magenta);
+  background: var(--white);
+  border: 1px solid color-mix(in srgb, var(--magenta) 45%, white);
+  border-radius: 999px;
+  padding: 2px 8px;
+  cursor: help;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
 }
 
 .wordmark {
@@ -162,6 +193,19 @@ img {
   flex-wrap: wrap;
 }
 
+.footer-publish {
+  flex-basis: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--purple);
+  font-weight: 600;
+}
+
+.footer-publish:hover {
+  color: var(--magenta);
+}
+
 /* ============================== Botones ============================== */
 
 .btn {
@@ -203,6 +247,56 @@ img {
 
 .btn-ghost:hover {
   border-color: var(--purple);
+}
+
+.btn-sm {
+  padding: 7px 14px;
+  font-size: 13.5px;
+}
+
+/* "Publicá tu propiedad" (WhatsApp para inmobiliarias/dueños, 05/09) */
+.publish-cta {
+  white-space: nowrap;
+}
+
+.publish-cta-short {
+  display: none;
+}
+
+.wa-icon {
+  flex: none;
+}
+
+.publish-block {
+  margin: 56px auto 0;
+  max-width: 760px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 22px 26px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.publish-block h2 {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--purple-deep);
+  margin: 0 0 4px;
+}
+
+.publish-block p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14.5px;
+}
+
+.publish-block .btn {
+  flex: none;
 }
 
 /* ============================== Home / Hero ============================== */
@@ -584,6 +678,12 @@ img {
   aspect-ratio: 3 / 2;
   background: linear-gradient(135deg, var(--pastel-2), var(--pastel-3));
   overflow: hidden;
+}
+
+.pcard-photo > a {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .pcard-photo img {
@@ -973,6 +1073,8 @@ details.score summary .why {
   color: var(--purple);
 }
 
+/* Galería (05/09): TODAS las fotos — principal con flechas y contador, tira
+   completa de miniaturas con scroll propio (vertical acá, horizontal en mobile). */
 .gallery {
   display: grid;
   grid-template-columns: 2fr 1fr;
@@ -981,21 +1083,83 @@ details.score summary .why {
   overflow: hidden;
 }
 
+.gallery--single {
+  grid-template-columns: 1fr;
+}
+
 .gallery-main {
+  position: relative;
   aspect-ratio: 16 / 10;
   background: linear-gradient(135deg, var(--pastel-2), var(--pastel-3));
 }
 
 .gallery-main img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  cursor: pointer;
+}
+
+.gallery-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 0;
+  padding: 0 0 4px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--purple);
+  font-size: 30px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+
+.gallery-nav:hover {
+  background: var(--white);
+  color: var(--magenta);
+}
+
+.gallery-nav--prev {
+  left: 12px;
+}
+
+.gallery-nav--next {
+  right: 12px;
+}
+
+.gallery-count {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  background: rgba(36, 16, 50, 0.72);
+  color: var(--white);
+  font-size: 12.5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  pointer-events: none;
 }
 
 .gallery-side {
+  position: relative;
+  min-height: 0;
+}
+
+.gallery-strip {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
   display: grid;
-  grid-template-rows: 1fr 1fr;
-  gap: 10px;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  align-content: start;
+  scrollbar-width: thin;
 }
 
 .gallery-thumb {
@@ -1004,14 +1168,16 @@ details.score summary .why {
   background: linear-gradient(135deg, var(--pastel-4), var(--pastel-5));
   overflow: hidden;
   cursor: pointer;
-  min-height: 0;
+  aspect-ratio: 4 / 3;
+  border-radius: 8px;
 }
 
 .gallery-thumb img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  opacity: 0.92;
+  opacity: 0.85;
   transition: opacity 0.15s;
 }
 
@@ -1648,11 +1814,26 @@ details.score summary .why {
     white-space: nowrap;
   }
 
+  /* el mercado ya está en el título de la home y en el pie; el botón de
+     publicar y la etiqueta Beta necesitan el lugar */
   .market-tag {
-    font-size: 11.5px;
-    padding: 3px 10px;
-    white-space: nowrap;
-    flex: none;
+    display: none;
+  }
+
+  .publish-cta-long {
+    display: none;
+  }
+
+  .publish-cta-short {
+    display: inline;
+  }
+
+  .publish-block {
+    margin-top: 40px;
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+    padding: 20px 18px;
   }
 
   /* --- home --- */
@@ -1807,7 +1988,7 @@ details.score summary .why {
     font-size: 17px;
   }
 
-  /* galería: foto principal + tira horizontal de miniaturas parejas */
+  /* galería: foto principal + tira horizontal con TODAS las miniaturas */
   .gallery {
     display: block;
   }
@@ -1818,20 +1999,30 @@ details.score summary .why {
     overflow: hidden;
   }
 
+  .gallery-nav {
+    width: 34px;
+    height: 34px;
+    font-size: 26px;
+  }
+
   .gallery-side {
+    margin-top: 8px;
+  }
+
+  .gallery-strip {
+    position: relative;
+    inset: auto;
     display: flex;
     gap: 8px;
-    margin-top: 8px;
     overflow-x: auto;
+    overflow-y: hidden;
     padding-bottom: 4px;
     -webkit-overflow-scrolling: touch;
   }
 
   .gallery-thumb {
     flex: 0 0 96px;
-    aspect-ratio: 4 / 3;
     border-radius: 10px;
-    overflow: hidden;
   }
 
   .gallery-thumb--active {

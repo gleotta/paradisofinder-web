@@ -36,6 +36,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# log de eventos de uso (MVP beta 05/09) — datos, no código
+/logs/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

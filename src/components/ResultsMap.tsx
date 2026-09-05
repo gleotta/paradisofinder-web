@@ -18,7 +18,7 @@ import type * as LType from "leaflet";
 import type { MapPin } from "@/lib/p2/types";
 import { PROPERTY_TYPE_LABEL, RENTAL_PERIOD_SUFFIX } from "@/lib/labels";
 import { compactPrice, fmtMoney } from "@/lib/format";
-import { EVENTS, trackEvent } from "@/lib/track";
+import { detailHref, EVENTS, trackCardClick, trackEvent } from "@/lib/track";
 
 const SJ_CENTER: [number, number] = [-31.5351, -68.5386];
 
@@ -27,6 +27,8 @@ interface Props {
   pins: MapPin[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  /** Corrida de búsqueda vigente: el link del popup la hereda (`?s=`). */
+  searchId: string | null;
 }
 
 /** Precio del pin: SIEMPRE el original, con sufijo de periodicidad en alquileres. */
@@ -64,12 +66,14 @@ function trimmedBounds(L: typeof LType, pins: MapPin[]): LType.LatLngBounds | nu
   return L.latLngBounds([lats[lo], lngs[lo]], [lats[hi], lngs[hi]]);
 }
 
-function popupHtml(pin: MapPin): string {
+/** El detalle abre en pestaña nueva (05/09); `data-id` sirve al tracking del click. */
+function popupHtml(pin: MapPin, searchId: string | null): string {
   const title = PROPERTY_TYPE_LABEL[pin.property_type] ?? "Propiedad";
-  return `<a class="map-pop map-pop--compact" href="/propiedad/${encodeURIComponent(pin.id)}"><span class="map-pop-price">${pinPrice(pin)}</span><span class="map-pop-title">${title}</span><span class="map-pop-cta">Ver detalle →</span></a>`;
+  const href = detailHref(pin.id, { searchId, from: "map" });
+  return `<a class="map-pop map-pop--compact" href="${href}" target="_blank" rel="noopener" data-id="${pin.id}"><span class="map-pop-price">${pinPrice(pin)}</span><span class="map-pop-title">${title}</span><span class="map-pop-cta">Ver detalle ↗</span></a>`;
 }
 
-export default function ResultsMap({ pins, selectedId, onSelect }: Props) {
+export default function ResultsMap({ pins, selectedId, onSelect, searchId }: Props) {
   const divRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LType.Map | null>(null);
   const LRef = useRef<typeof LType | null>(null);
@@ -78,6 +82,7 @@ export default function ResultsMap({ pins, selectedId, onSelect }: Props) {
   const pinsRef = useRef<Map<string, MapPin>>(new Map());
   const roRef = useRef<ResizeObserver | null>(null);
   const onSelectRef = useRef(onSelect);
+  const searchIdRef = useRef(searchId);
   const boundsRef = useRef<LType.LatLngBounds | null>(null);
   const hadSizeRef = useRef(false);
   // Cambia en cada init exitoso para que los efectos de markers re-corran
@@ -87,6 +92,10 @@ export default function ResultsMap({ pins, selectedId, onSelect }: Props) {
   useEffect(() => {
     onSelectRef.current = onSelect;
   }, [onSelect]);
+
+  useEffect(() => {
+    searchIdRef.current = searchId;
+  }, [searchId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -128,6 +137,18 @@ export default function ResultsMap({ pins, selectedId, onSelect }: Props) {
         },
       }).addTo(map);
       mapRef.current = map;
+
+      // El popup es HTML crudo: el click en "Ver detalle" se registra al abrirse
+      // (una vez por elemento) como card_clicked desde el mapa.
+      map.on("popupopen", (e) => {
+        const a = e.popup.getElement()?.querySelector<HTMLAnchorElement>("a.map-pop");
+        if (!a || a.dataset.bound) return;
+        a.dataset.bound = "1";
+        a.addEventListener("click", () => {
+          const id = a.dataset.id ?? "";
+          trackCardClick({ id, opportunity_score: null }, "map", null);
+        });
+      });
 
       // El contenedor puede arrancar oculto (overlay cerrado / toggle):
       // al ganar tamaño real, recalcular el canvas y encuadrar los markers.
@@ -185,7 +206,7 @@ export default function ResultsMap({ pins, selectedId, onSelect }: Props) {
         onSelectRef.current(pin.id);
         trackEvent(EVENTS.MAP_MARKER_CLICK, { property_id: pin.id });
       });
-      marker.bindPopup(popupHtml(pin), { closeButton: false, offset: [0, -14] });
+      marker.bindPopup(popupHtml(pin, searchIdRef.current), { closeButton: false, offset: [0, -14] });
       markersRef.current.set(pin.id, marker);
       pinsRef.current.set(pin.id, pin);
       batch.push(marker);

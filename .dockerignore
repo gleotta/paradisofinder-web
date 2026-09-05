@@ -1,0 +1,30 @@
+# Contexto de build mínimo: código fuente + lockfile + mocks (los importa src/lib/p2/mocks.ts).
+node_modules
+.next
+out
+build
+coverage
+.git
+.gitignore
+.github
+.vscode
+.idea
+.DS_Store
+*.log
+tsconfig.tsbuildinfo
+next-env.d.ts
+
+# secretos y config local: en Railway las variables van por el dashboard
+.env*
+
+# el propio Dockerfile no va en el contexto (editarlo no debe invalidar `COPY . .`)
+Dockerfile
+
+# datos y material de trabajo, no del build
+logs
+shots-map
+docs
+scripts
+*.md
+railway.json
+docker-compose*.yml

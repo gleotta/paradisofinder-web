@@ -22,7 +22,8 @@ import {
   secondaryPrice,
 } from "@/lib/format";
 import { SignalBadge, ratingDotStyle } from "@/components/signals";
-import { BackLink, ContactActions, DetailTracker, Gallery, SourceLinks } from "@/components/detail";
+import { BackLink, ContactActions, DetailTracker, Gallery, MiniCardLink, SourceLinks } from "@/components/detail";
+import { isCardOrigin, isSearchId } from "@/lib/tracking-ids";
 
 /**
  * Pantalla 3 — Detalle de propiedad (producto §6): página propia con URL por
@@ -57,8 +58,20 @@ export async function generateMetadata({
   };
 }
 
-export default async function PropertyPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PropertyPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { id } = await params;
+  const sp = await searchParams;
+  // Contexto de la búsqueda que abrió esta pestaña (05/09): solo con la forma
+  // esperada; cualquier otra cosa se ignora y la visita cuenta como directa.
+  const searchId = isSearchId(sp.s) ? sp.s : null;
+  const rank = typeof sp.r === "string" && /^\d{1,5}$/.test(sp.r) ? Number(sp.r) : null;
+  const from = isCardOrigin(sp.from) ? sp.from : null;
   const data = await load(id);
   if (!data) notFound();
 
@@ -75,7 +88,7 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
 
   return (
     <main className="detail-page container">
-      <DetailTracker propertyId={p.id} />
+      <DetailTracker propertyId={p.id} searchId={searchId} rank={rank} from={from} />
       <BackLink />
 
       <div className="detail-title-row">
@@ -210,9 +223,9 @@ export default async function PropertyPage({ params }: { params: Promise<{ id: s
                     </>
                   );
                   return mc.id ? (
-                    <a className="minicard" href={`/propiedad/${encodeURIComponent(mc.id)}`} key={mc.id}>
+                    <MiniCardLink id={mc.id} searchId={searchId} key={mc.id}>
                       {body}
-                    </a>
+                    </MiniCardLink>
                   ) : (
                     <div className="minicard" key={i}>
                       {body}

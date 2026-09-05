@@ -198,10 +198,54 @@ export async function getProperty(id: string): Promise<PropertyDetailResponse | 
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* Health (deploy) — GET /api/health de P1                            */
+/* ------------------------------------------------------------------ */
+
+export function p2Mode(): Mode {
+  return mode();
+}
+
+/** Host de P2 sin credenciales, para el diagnóstico del healthcheck. */
+export function p2Target(): string | null {
+  const url = baseUrl();
+  if (!url) return null;
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
+/** Sonda corta a GET /api/v1/health de P2; jamás lanza. */
+export async function p2Health(): Promise<{ status: "ok" | "down" | "mock"; http?: number; detail?: string }> {
+  if (mocksEnabled()) return { status: "mock" };
+  try {
+    const res = await fetch(`${baseUrl()}/api/v1/health`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(3000),
+    });
+    return res.ok ? { status: "ok", http: res.status } : { status: "down", http: res.status };
+  } catch (err) {
+    return { status: "down", detail: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+const warnedEvents = new Set<string>();
+
 /** Fire-and-forget: la observabilidad jamás rompe la experiencia. */
 export function postEvent(body: TrackEventBody): void {
   if (mocksEnabled()) return;
-  p2Fetch("/events", { method: "POST", body: JSON.stringify(body) }).catch(() => {
-    /* fire-and-forget */
-  });
+  p2Fetch("/events", { method: "POST", body: JSON.stringify(body) })
+    .then((res) => {
+      // Un rechazo (422 = fuera del enum o session_id no-UUID) se avisa UNA vez
+      // por tipo: hasta el 05/09 P2 rechazaba todo y el silencio lo tapaba.
+      if (!res.ok && !warnedEvents.has(body.event_type)) {
+        warnedEvents.add(body.event_type);
+        console.warn(`[p2] /events rechazó "${body.event_type}" con HTTP ${res.status}`);
+      }
+    })
+    .catch(() => {
+      /* fire-and-forget */
+    });
 }

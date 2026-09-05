@@ -6,12 +6,26 @@ con listado + mapa (patrón Airbnb). Next.js (App Router). Antes de tocar códig
 `docs/P1_INTEGRATION_SPEC.md` → `docs/prompt-inicial.md` → `docs/producto-p1.md`), más los
 dos registros de decisión que revierten cosas de esos documentos:
 `docs/DECISION_2026-08-29_mapa.md` y `docs/DECISION_2026-08-29_busqueda-simple.md`.
+El primer MVP (beta, analítica propia, botón de publicar, detalle en pestaña nueva,
+galería completa) está en `docs/DECISION_2026-09-05_mvp-beta.md`. Para correrla en Docker
+(instalar, construir, operar, leer logs): `docs/DOCKER.md`; para el deploy en Railway:
+`docs/DEPLOY_RAILWAY.md`.
+
+Hay dos formas de correr P1 en esta máquina, y usan el mismo puerto (3000), así que no
+conviven:
+
+| Modo | Para qué | Cómo |
+|---|---|---|
+| **Desarrollo** (`npm run dev`) | tocar código, hot reload | secciones Requisitos → Ejecución de este README |
+| **Docker** (`docker compose up -d`) | correr la misma imagen que Railway, con el log de eventos en un volumen | `docs/DOCKER.md` (resumen en **Ejecución en Docker**) |
 
 ## Requisitos
 
-- **Node.js ≥ 20.9** (`engines` de Next 16; probado en 24.2) y npm 10+.
+- **Node.js ≥ 20.9** (`engines` de Next 16; probado en 24.2) y npm 10+. Para el modo
+  Docker solo hace falta Docker Desktop / Engine 24+ con Compose v2.
 - **P2 (FINDER Core)** en `http://localhost:8000` — el Docker de la instancia San Juan.
-  Es opcional: sin P2, P1 sirve los mocks de `/mocks` (modo demo).
+  En desarrollo es opcional (sin P2, P1 sirve los mocks de `/mocks`, modo demo); en Docker
+  es obligatorio (`P2_MODE=live`, sin mocks).
 
 ## Instalación
 
@@ -24,15 +38,18 @@ cp .env.example .env.local     # y editar — ver Configuración
 
 ## Configuración
 
-Tres variables, las tres **solo del server**. Topología A: el browser nunca habla con P2,
+Todas las variables son **solo del server**. Topología A: el browser nunca habla con P2,
 así que **ninguna lleva prefijo `NEXT_PUBLIC_`** — eso filtraría la API key al bundle del
-cliente.
+cliente (y el número de WhatsApp se lee por request, sin rebuild).
 
 | Variable | Default | Qué hace |
 |---|---|---|
 | `P2_BASE_URL` | vacío → mocks | URL base de P2 **sin** `/api/v1` (lo agrega `src/lib/p2/client.ts`). Docker local: `http://localhost:8000`. |
 | `P2_API_KEY` | vacío | Header `X-API-Key`. Vacío = auth apagada, que es como está el Docker de desarrollo. |
 | `P2_MODE` | `auto` | `auto`: P2 si hay URL, y ante fallo de **conexión** cae a mocks con warning · `live`: solo P2, los errores se propagan · `mock`: siempre mocks. |
+| `CONTACT_WHATSAPP` | vacío → sin botón | Número (solo dígitos, con código de país, ej. `5492645550000`) del botón **"Publicá tu propiedad"** para inmobiliarias/dueños. Vacío = el botón no se muestra. |
+| `CONTACT_WHATSAPP_TEXT` | "Hola, quiero publicar…" | Texto prellenado del mensaje de WhatsApp. |
+| `EVENTS_LOG_DIR` | `logs` | Directorio del **log propio de eventos** (`events-YYYY-MM-DD.jsonl`, fecha UTC). Vacío = solo stdout. Ver **Analítica de uso**. |
 
 El `.env.local` de esta máquina **ya viene apuntado al P2 real**. Ojo con `.env.example`:
 dice puerto 8001 (instancia de prueba), la instancia real es la **8000**.
@@ -71,6 +88,32 @@ npm run build && npm start      # http://localhost:3000
 npm run lint
 ```
 
+## Ejecución en Docker
+
+Runbook completo (instalación, configuración, operación, logs, problemas típicos):
+**`docs/DOCKER.md`**. Lo esencial — es la misma imagen que se deploya en Railway, apuntada
+al P2 del Docker local:
+
+```bash
+docker compose up -d --build      # construir + arrancar → http://localhost:3000 (3-5 min la 1ª vez)
+docker compose ps                 # paradisofinder-web  Up … (healthy)
+curl -s "http://localhost:3000/api/health?deep=1"   # …"p2":{"status":"ok"} = llega a P2
+docker compose logs -f            # logs del server
+docker compose up -d --build      # actualizar tras un git pull / cambio de código
+docker compose down               # parar (el volumen con los eventos queda; -v lo borra)
+```
+
+Variables: `CONTACT_WHATSAPP` y `P2_API_KEY` se toman de un `.env` junto al compose (o del
+shell); `P2_BASE_URL` ya apunta a `host.docker.internal:8000`. El log de eventos queda en
+el volumen `pfw-data` (`/data/logs/events-YYYY-MM-DD.jsonl`, fecha UTC):
+
+```bash
+docker compose exec web sh -c 'cat /data/logs/*.jsonl' > events.jsonl
+node scripts/events-report.mjs events.jsonl
+```
+
+Usa el puerto 3000, el mismo que `npm run dev`: no correr los dos a la vez.
+
 **Parar.** `npm run dev` levanta tres procesos (`npm run dev` → `next dev` → `next-server`)
 y matar el de arriba no siempre arrastra a los de abajo: puede quedar el puerto tomado. Al
 que hay que matar es al que escucha — eso sí baja el árbol entero y borra el lock:
@@ -92,6 +135,7 @@ kill -TERM -<PGID>
 
 ```bash
 curl -s -o /dev/null -w "P1 %{http_code}\n" http://localhost:3000/
+curl -s "http://localhost:3000/api/health?deep=1"    # P1 vivo + estado de P2 visto desde P1
 curl -s -o /dev/null -w "P2 %{http_code}\n" http://localhost:8000/api/v1/health
 open http://localhost:8000/docs        # Swagger vivo de P2 — la fuente de verdad del contrato
 ```
@@ -119,7 +163,8 @@ SCROLL (de a 10 hasta agotar el criterio, SIN tope) — página 2 del buffer, si
                                         (paginación 29/08: sin query, no es turno, ~100 ms,
                                          cards → done sin narrativa)
 SIEMPRE:
-        ── /api/events            ──► POST /api/v1/events             (fire-and-forget)
+        ── /api/events            ──► logs/events-YYYY-MM-DD.jsonl (log propio, TODO evento)
+                                  ──► POST /api/v1/events (solo lo que entra en el enum de P2)
 página de detalle (server component) ──► GET /api/v1/property/{id}
 
 * `related` (embeddings, máx 10, ya deduplicado) llega SOLO con la última página
@@ -142,11 +187,19 @@ se eliminó de P1 el 30/08: `related` viene resuelto (`docs/CAMBIOS_P2_PARA_P1_2
 | `src/app/buscar/` + `src/components/SearchResultsView.tsx` | Pantalla 2: búsqueda simple (sesión nueva + SSE) — listado izquierda + mapa derecha |
 | `src/lib/sse.ts` | Parser SSE (ojo: P2 usa CRLF; ver hallazgos) |
 | `src/components/ResultsMap.tsx` | Mapa Leaflet con clustering, alimentado por `/search/map` |
-| `src/app/propiedad/[id]/` | Pantalla 3: detalle con señales explicadas, indicadores, comparables |
+| `src/app/propiedad/[id]/` + `src/components/detail.tsx` | Pantalla 3: detalle (abre en pestaña nueva) con galería completa, señales explicadas, indicadores, comparables |
 | `src/lib/p2/` | Contrato (`types.ts`), cliente server-only (`client.ts`), mocks (`mocks.ts`) |
 | `src/lib/format.ts` / `labels.ts` | Reglas de display de la card (spec §5) y etiquetas es-AR de códigos estables |
 | `src/lib/chips.ts` | Chips de oportunidad → frases canónicas para P2 |
-| `src/lib/track.ts` + `src/app/api/events/` | Observabilidad (`trackEvent`, fire-and-forget) |
+| `src/lib/track.ts` + `src/lib/tracking-ids.ts` | Analítica del browser (`trackEvent`, `search_id`, link del detalle con contexto) |
+| `src/app/api/events/` + `src/lib/server/event-log.ts` | Log propio JSONL + reenvío a P2 de lo que entra en su enum |
+| `scripts/events-report.mjs` | Reporte consulta → resultados → clicks a partir del log |
+| `Dockerfile` + `docker-entrypoint.sh` + `.dockerignore` | Imagen standalone no-root (`docs/DOCKER.md`): volumen `/data` para el log, healthcheck `/api/health` |
+| `docker-compose.yml` | Correr esa imagen en local contra el P2 del Docker (puerto 3000, volumen `pfw-data`) |
+| `railway.json` | Deploy en Railway (`docs/DEPLOY_RAILWAY.md`): builder Dockerfile, healthcheck, restart |
+| `src/proxy.ts` + `next.config.ts` | Hardening HTTP: CSP con nonce por request, HSTS, nosniff, X-Frame-Options, Permissions-Policy |
+| `src/app/api/health/` | Healthcheck (`?deep=1` sondea P2) |
+| `src/components/PublishCta.tsx` + `src/lib/server/contact.ts` | Botón "Publicá tu propiedad" (WhatsApp, `CONTACT_WHATSAPP`) |
 
 ## Reglas que este código respeta (no romper)
 
@@ -171,7 +224,46 @@ se eliminó de P1 el 30/08: `related` viene resuelto (`docs/CAMBIOS_P2_PARA_P1_2
 - Diferencias del contrato real ya contempladas: `deal_rating_reasons` y el SSE con CRLF
   (`docs/HALLAZGOS_DATOS_REALES_2026-08-29.md`); renombres del 29-30/08 (`related`,
   `summary`, `market`) y paginación por sesión (`docs/CAMBIOS_P2_PARA_P1_2026-08-30.md`).
-- Sin selector de vertical en el portal (decisión 28/08).
+- Selector de vertical Alquilar · Comprar · Invertir desde el 01/09
+  (`docs/DECISION_2026-09-01_selector-vertical.md`): viaja como frase canónica, nunca como
+  `vertical_override` en sesión nueva.
+- MVP beta (05/09, `docs/DECISION_2026-09-05_mvp-beta.md`): etiqueta Beta en el header y
+  el pie; **el detalle abre en pestaña nueva** (card, popup del mapa, comparables) con
+  `?s=<search_id>&r=<rank>` para la analítica; la galería muestra **todas** las fotos
+  (P2 manda hasta 24); el botón de publicar solo aparece con `CONTACT_WHATSAPP`.
+
+## Analítica de uso (MVP beta, 05/09)
+
+Toda interacción pasa por `POST /api/events` del server de P1, que escribe **una línea
+JSON por evento** en `logs/events-YYYY-MM-DD.jsonl` (fecha UTC, directorio
+`EVENTS_LOG_DIR`, gitignored) y reenvía a `POST /events` de P2 solo los que entran en su
+enum cerrado (`card_clicked`, `detail_viewed`, `outbound_click`, `empty_results`,
+`nivel1_shown`, `refinement_applied`). OJO: P2 rechaza con 422 cualquier otro
+`event_type` y cualquier `session_id` que no sea UUID — hasta el 05/09 no entraba ninguno.
+
+Cada línea trae `visitor_id` (persiste entre pestañas), `tab_id`, `session_id` (la sesión
+de P2 de esa búsqueda, la misma que P2 usa en sus propios eventos) y **`search_id` =
+`<session_id>.<turno>`**, la clave que une consulta → resultados → navegación. Como el
+detalle abre en otra pestaña, el link lleva `?s=<search_id>&r=<rank>` y la pestaña nueva
+adopta ese contexto. Los eventos y sus payloads están en
+`docs/DECISION_2026-09-05_mvp-beta.md`; el "score" es el `opportunity_score` de P3 por card
+(`search_results.results[]`) más `scores{top,avg,min}`.
+
+```bash
+node scripts/events-report.mjs            # lee logs/ y arma el reporte por búsqueda
+node scripts/events-report.mjs logs/events-2026-09-05.jsonl
+jq -c 'select(.event=="card_clicked") | [.search_id,.payload.rank,.payload.score]' logs/*.jsonl
+```
+
+## Deploy en Railway (Docker)
+
+Runbook completo en `docs/DEPLOY_RAILWAY.md`. Resumen: Railway construye el `Dockerfile`
+(Next `output: "standalone"`, usuario no-root, `HOSTNAME=::` dual-stack, `P2_MODE=live`),
+lee `railway.json` (healthcheck `/api/health`, restart on failure) y las variables van en
+el dashboard: `P2_BASE_URL` (red privada `http://<p2>.railway.internal:8000` — P2 debe
+escuchar en `::`), `P2_API_KEY`, `CONTACT_WHATSAPP`. Montar un volumen en `/data` para que
+el log de eventos sobreviva a los deploys; se lee con `railway ssh -- cat /data/logs/*.jsonl`.
+La imagen es la misma que corre `docker compose up -d` en local (`docs/DOCKER.md`).
 
 ## Consultas para probar (contra P2 real)
 
