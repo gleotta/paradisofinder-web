@@ -120,7 +120,11 @@ con una consulta que pide clarificación.
 ## Configurar Railway (una vez) — lo que falta del handoff del 05/09
 
 Del lado de P2 ya está todo (stage con auth encendida en
-`https://paradisofinder-core-staging.up.railway.app`). Del lado de P1:
+`https://paradisofinder-core-staging.up.railway.app`). Del lado de P1 quedó hecho el
+05/09: servicio conectado a `stage`, `https://paradisofinder-web-staging.up.railway.app`,
+red privada a P2 verificada con `?deep=1`, smoke verde y `STAGE_BASE_URL` en `.ci/config`.
+Falta `STAGE_P2_API_KEY` en `.env.local` para el cruce con P2. Los pasos, para repetirlos
+en otro entorno:
 
 1. **Servicio**: conectado al repo `gleotta/paradisofinder-web`, rama
    **`stage`** → entorno `stage`. `railway.json` ya fija builder `DOCKERFILE`,
@@ -135,9 +139,11 @@ Del lado de P2 ya está todo (stage con auth encendida en
    `stage` → Variables), `P2_MODE=live` (ya viene en el Dockerfile),
    `CONTACT_WHATSAPP`, volumen en `/data`. Detalle: `docs/DEPLOY_RAILWAY.md`.
 3. **Dominio**: Settings → Networking → Generate Domain, y que el **puerto
-   destino sea 3000** (el que fija el Dockerfile). Si no coincide, el edge
-   devuelve `502 Application failed to respond` con la app perfectamente
-   sana en los logs — a P2 le costó media hora.
+   destino sea el `PORT` que Railway inyecta en el contenedor — 8080 en este
+   servicio —, no el 3000 del Dockerfile**, que la variable de Railway pisa.
+   Si no coincide, el edge devuelve `502 Application failed to respond` con la
+   app perfectamente sana en los logs — a P2 le costó media hora; en P1, con
+   3000 no anduvo y con 8080 sí. Dominio propio: `docs/DEPLOY_RAILWAY.md` §Pasos 4.
 4. **Smoke**: en `.ci/config` (gitignored) la URL que te dio Railway, y en
    `.env.local` la key del stage de P2 para el cruce de `total_matches`:
 

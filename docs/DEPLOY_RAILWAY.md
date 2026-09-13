@@ -30,7 +30,7 @@ falta rebuild para cambiarlas; sí redeploy, que Railway hace solo al guardar).
 | `CONTACT_WHATSAPP` | `549264…` (solo dígitos) | Botón "Publicá tu propiedad". Vacío = no se muestra. |
 | `CONTACT_WHATSAPP_TEXT` | opcional | Texto prellenado. |
 | `EVENTS_LOG_DIR` | `/data/logs` (default del Dockerfile) | Con volumen montado en `/data`. Vacío = solo stdout (Railway Logs). |
-| `PORT` | la inyecta Railway | Next la lee; el Dockerfile expone 3000 por si no la inyecta. |
+| `PORT` | **la inyecta Railway** (en este servicio, `8080`) y pisa el `PORT=3000` del Dockerfile | Next escucha en lo que diga `PORT`; el 3000 del Dockerfile es el default para Docker local. El **puerto destino** de los dominios (generado y propio) tiene que ser este valor: se ve al lado del dominio generado en Public Networking. Si se quiere fijar otro, declarar `PORT` en Variables y cambiar el puerto destino a la par (P2 hizo eso con `PORT=8000`). |
 
 Railway aporta además `RAILWAY_GIT_COMMIT_SHA` (la muestra `/api/health` como `version`).
 
@@ -49,10 +49,28 @@ Railway aporta además `RAILWAY_GIT_COMMIT_SHA` (la muestra `/api/health` como `
    de Railway si algo falla: variable `RAILWAY_RUN_UID=0` (corre como root).
 4. **Dominio.** Settings → Networking → Generate Domain (o dominio propio).
    Railway termina TLS; HSTS ya viene en los headers. **El puerto destino del dominio
-   tiene que ser 3000** (el que fija el Dockerfile): Railway inyecta `PORT` y el dominio
-   rutea a un puerto fijo que se configura aparte; si no coinciden, el edge devuelve
-   `502 Application failed to respond` con la app perfectamente sana en los logs (a P2 le
-   costó media hora, handoff del 05/09 §5).
+   tiene que ser el `PORT` que Railway inyecta en el contenedor — 8080 en este servicio —,
+   no el 3000 del Dockerfile**, porque la variable de Railway lo pisa (verificado el 05/09:
+   con 3000 no anduvo, con 8080 sí). El dominio rutea a un puerto fijo que se configura
+   aparte; si no coincide con el que escucha Next, el edge devuelve `502 Application failed
+   to respond` con la app perfectamente sana en los logs (a P2 le costó media hora, handoff
+   del 05/09 §5). Los usuarios siguen entrando por 80/443: eso es el edge de Railway y no se
+   configura.
+
+   **Dominio propio** (`finder.paradisoestate.com`, DNS en GoDaddy — 05/09): Settings →
+   Public Networking → **+ Custom Domain** → el hostname y el mismo puerto destino (8080).
+   Railway devuelve **dos registros**, y los dos son obligatorios: un `CNAME` cuyo valor es
+   un host generado por Railway (tipo `g05ns7.up.railway.app`, **no** el dominio
+   `*.up.railway.app` del servicio) y un `TXT` de verificación de propiedad; sin el TXT el
+   dominio da 404 aunque el CNAME resuelva. En GoDaddy el nombre del registro es solo
+   `finder`. Un CNAME directo al dominio generado no sirve: el edge no conoce el hostname y
+   contesta con el certificado genérico `*.up.railway.app` (error TLS en el browser). El
+   certificado de Let's Encrypt sale solo, dentro de la hora de que el DNS refleje los
+   valores; tilde verde en el panel. Comprobar:
+   ```bash
+   curl -sI https://finder.paradisoestate.com/api/health | head -1
+   openssl s_client -connect finder.paradisoestate.com:443 -servername finder.paradisoestate.com </dev/null 2>/dev/null | openssl x509 -noout -subject
+   ```
 5. **Deploy.** Automático en cada push a `stage` (integración de GitHub). El pipeline
    local (`docs/CI_CD.md`) pone un gate adelante del push, verifica la misma imagen en
    local y hace el smoke contra la URL cuando Railway la promueve. Manual: `railway up`.

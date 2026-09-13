@@ -13,6 +13,11 @@
 > debería alcanzar al `--host 0.0.0.0` de P2 sin cambios. Es el valor a usar en
 > `P2_BASE_URL` (mismo proyecto y entorno); la URL pública queda como plan B.
 > Detalle en `docs/DEPLOY_RAILWAY.md`.
+>
+> **Segunda corrección (05/09, German):** el §5.4 dice que en P1 "el Dockerfile fija
+> `PORT=3000`". Cierto, pero Railway inyecta su propia `PORT` (8080 en el servicio de
+> P1) y pisa la del Dockerfile: el puerto destino de los dominios es **8080**. Con
+> 3000 el edge daba 502; con 8080 anduvo.
 
 Qué hay acá: lo que P2 ya dejó andando en Railway, las variables que P1
 necesita para hablarle, un bloqueante que es de P2 y hay que decidir, y el
