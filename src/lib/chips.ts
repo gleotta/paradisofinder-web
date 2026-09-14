@@ -36,14 +36,14 @@ export const OPPORTUNITY_CHIPS: OpportunityChip[] = [
     label: "Los más baratos",
     phrase: "las más baratas primero",
     hint: "Menor precio absoluto primero",
-    verticals: ["alquilar", "comprar"],
+    verticals: ["alquilar", "comprar", "lotes"],
   },
   {
     id: "gangas",
     label: "Gangas de la zona",
     phrase: "las que están más por debajo del precio de su zona",
     hint: "Bajo comparables de su zona",
-    verticals: ["comprar", "invertir"],
+    verticals: ["comprar", "invertir", "lotes"],
   },
   {
     id: "renta",

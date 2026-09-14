@@ -7,7 +7,8 @@ import type { ClientEvent } from "@/lib/track";
 import { isUuid } from "@/lib/tracking-ids";
 
 /**
- * Observabilidad (MVP beta, 05/09 — `docs/DECISION_2026-09-05_mvp-beta.md`):
+ * Observabilidad (MVP beta, 05/09 — `docs/DECISION_2026-09-05_mvp-beta.md`;
+ * embudo 14/09 — `docs/DECISION_2026-09-14_qa-produccion.md` T7):
  *  1. TODO evento queda en el log propio de P1 (`logs/events-YYYY-MM-DD.jsonl`).
  *  2. Se reenvía a POST /events de P2 (spec §4) solo lo que entra en su
  *     contrato: `event_type` de su enum cerrado y `session_id` UUID de una
@@ -21,8 +22,12 @@ import { isUuid } from "@/lib/tracking-ids";
 const P2_EVENT: Partial<Record<ClientEvent["event_type"], P2EventType>> = {
   zero_results: "empty_results",
   clarification_shown: "nivel1_shown",
-  clarification_chip_selected: "refinement_applied",
-  card_clicked: "card_clicked",
+  clarification_choice: "refinement_applied",
+  chip_removed: "refinement_applied",
+  chip_edited: "refinement_applied",
+  order_changed: "refinement_applied",
+  assumption_flipped: "refinement_applied",
+  card_opened: "card_clicked",
   property_detail_opened: "detail_viewed",
   contact_click: "outbound_click",
   source_click: "outbound_click",
@@ -51,6 +56,8 @@ export async function POST(req: Request) {
     tab_id: typeof body.tab_id === "string" ? body.tab_id : "anon",
     session_id: isUuid(body.session_id) ? body.session_id : null,
     search_id: typeof body.search_id === "string" ? body.search_id.slice(0, 48) : null,
+    vertical: typeof body.vertical === "string" ? body.vertical.slice(0, 20) : null,
+    query: typeof body.query === "string" ? body.query.slice(0, 300) : null,
     page: typeof body.page === "string" ? body.page.slice(0, 200) : "",
     ts: typeof body.ts === "string" ? body.ts : "",
   };
@@ -65,6 +72,8 @@ export async function POST(req: Request) {
     tab_id: ev.tab_id,
     session_id: ev.session_id,
     search_id: ev.search_id,
+    vertical: ev.vertical,
+    query: ev.query,
     page: ev.page || null,
     payload: ev.payload,
     client_ts: ev.ts || null,
@@ -76,7 +85,13 @@ export async function POST(req: Request) {
     postEvent({
       session_id: ev.session_id,
       event_type: p2Type,
-      payload: { ...ev.payload, p1_event: ev.event_type, search_id: ev.search_id, visitor_id: ev.visitor_id },
+      payload: {
+        ...ev.payload,
+        p1_event: ev.event_type,
+        search_id: ev.search_id,
+        visitor_id: ev.visitor_id,
+        vertical: ev.vertical,
+      },
     });
   }
   return NextResponse.json({ ok: true }, { status: 202 });

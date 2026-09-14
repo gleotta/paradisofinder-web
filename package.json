@@ -9,7 +9,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:e2e": "playwright test",
+    "test:e2e:mobile": "playwright test --project=mobile",
+    "seo:catalog": "node scripts/seo-catalog.mjs",
+    "seo:warm": "node scripts/seo-warm.mjs",
+    "qa:latency": "node scripts/qa-latency.mjs",
+    "events:report": "node scripts/events-report.mjs"
   },
   "dependencies": {
     "leaflet": "^1.9.4",
@@ -20,6 +26,7 @@
     "server-only": "^0.0.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/leaflet": "^1.9.22",
     "@types/leaflet.markercluster": "^1.5.6",
     "@types/node": "^20",

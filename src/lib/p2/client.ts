@@ -18,6 +18,7 @@ import type {
   StreamRequest,
   StructuredParams,
   StructuredResponse,
+  SyncSearchResponse,
   TrackEventBody,
 } from "./types";
 import {
@@ -26,6 +27,7 @@ import {
   mockSearchMap,
   mockSearchStream,
   mockSearchStructured,
+  mockSearchSync,
   mockSearchText,
 } from "./mocks";
 
@@ -176,6 +178,17 @@ export async function searchStream(body: StreamRequest): Promise<Response> {
     }
     throw err;
   }
+}
+
+/**
+ * Fallback SYNC (contrato 13/09 §3.7): `POST /search` con la MISMA sesión —
+ * mismas cards y summary que el stream, resumen template en `llm_response`,
+ * sin narrativa LLM. Lo dispara el botón "Buscar con filtros" cuando el
+ * stream lleva 4 s sin `cards` (T1). Como pasa por la sesión, el criterio
+ * queda acumulado igual que en un turno: paginación y mapa siguen andando.
+ */
+export function searchSync(body: StreamRequest): Promise<SyncSearchResponse> {
+  return p2Json("/search", body, () => mockSearchSync(body));
 }
 
 /* ------------------------------------------------------------------ */

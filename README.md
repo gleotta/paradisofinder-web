@@ -51,6 +51,8 @@ cliente (y el número de WhatsApp se lee por request, sin rebuild).
 | `CONTACT_WHATSAPP` | vacío → sin botón | Número (solo dígitos, con código de país, ej. `5492645550000`) del botón **"Publicá tu propiedad"** para inmobiliarias/dueños. Vacío = el botón no se muestra. |
 | `CONTACT_WHATSAPP_TEXT` | "Hola, quiero publicar…" | Texto prellenado del mensaje de WhatsApp. |
 | `EVENTS_LOG_DIR` | `logs` | Directorio del **log propio de eventos** (`events-YYYY-MM-DD.jsonl`, fecha UTC). Vacío = solo stdout. Ver **Analítica de uso**. |
+| `SITE_URL` | `https://paradisofinder.com` | Origen público (14/09): canonical, Open Graph, `sitemap.xml` y el link del detalle en el mensaje de WhatsApp de **"Consultar"**. En local: `http://localhost:3000`. |
+| `METRICS_TOKEN` | vacío | Acceso al tablero interno de embudo `/interno/embudo?token=…` (14/09). Vacío = el tablero solo existe fuera de producción. |
 
 El `.env.local` de esta máquina **ya viene apuntado al P2 real**. Ojo con `.env.example`:
 dice puerto 8001 (instancia de prueba), la instancia real es la **8000**.
@@ -298,3 +300,36 @@ hasta el final, la última página trae 2 cards + 10 "similares" y el cierre del
 `departamento en jachal` (0 resultados → acciones para relajar el criterio + bloque
 "Podrían interesarte") · `algo lindo` (clarificación con chips) · `comprar hola`
 (P2 sigue sin señal → P1 pide un dato concreto en vez de repetir los chips).
+
+
+## Pruebas de interfaz (Playwright, 14/09)
+
+Una suite por tarea del cierre del QA (`tests/e2e/t1-streaming` … `t7-metrics`) más los
+bloques F y G de la batería. Corren contra un P1 **ya levantado** (Docker `:3000`, `npm run dev`
+o el stage) usando el Google Chrome del sistema; mobile (380 px) primero.
+
+```bash
+npm run test:e2e                                  # contra http://localhost:3000
+BASE_URL=http://localhost:3001 npm run test:e2e   # contra otro P1
+npx playwright test t1 --project=mobile           # una suite, un proyecto
+```
+
+Pasan con P2 real y con mocks (`P2_MODE=mock`). `t1` mide el tiempo al primer estado visible
+(< 500 ms) y lo que cuesta pintar las cards después del evento (< 200 ms). Reporte HTML en
+`tests/e2e/.report/` (gitignored).
+
+## Páginas SEO zona × tipo × operación (14/09)
+
+`/<departamentos|casas|lotes|propiedades>-en-<venta|alquiler>-en-<zona>-san-juan`. Qué
+combinaciones existen (≥ 5 avisos) lo decide `src/data/seo-catalog.json`, que se regenera
+contra P2 con:
+
+```bash
+npm run seo:catalog                                       # P2 local
+P2_BASE_URL=https://… P2_API_KEY=… npm run seo:catalog    # producción (30 búsquedas/min: ~5 min)
+```
+
+Cada página pide sus cards y el conteo real al servirse (cache 6 h; si P2 no responde, sirve
+el conteo del catálogo sin cards). Después de un deploy, precalentar el cache al ritmo del rate
+limit de P2: `npm run seo:warm -- https://paradisofinder.com`. `robots.txt` y `sitemap.xml` se
+generan solos (`src/app/robots.ts`, `src/app/sitemap.ts`).

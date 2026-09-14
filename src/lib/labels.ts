@@ -4,10 +4,17 @@
  * igual que la spec pide "Inmobiliaria"/"Dueño directo" para `publisher`.
  */
 import type {
+  AgeFlag,
   Condition,
+  DealRating,
+  LandClass,
+  LandService,
+  LandZoning,
+  ListingStatus,
   Operation,
   PropertyType,
   Publisher,
+  RatingColor,
   RentalPeriod,
   RoomClass,
 } from "./p2/types";
@@ -15,7 +22,8 @@ import type {
 export const PROPERTY_TYPE_LABEL: Record<PropertyType, string> = {
   house: "Casa",
   apartment: "Departamento",
-  land: "Terreno",
+  // Contrato 13/09 §4.4: la etiqueta de `land` es "Lote".
+  land: "Lote",
   office: "Oficina",
   retail: "Local comercial",
   villa: "Villa",
@@ -74,12 +82,32 @@ export const RATING_LABEL_SHORT: Record<keyof typeof RATING_LABEL, string> = {
   rental_investment_rating: "Renta",
 };
 
+/**
+ * Etiqueta visible de los valores NO cromáticos de `deal_rating` (contrato
+ * 13/09 §4.1, sugeridas por P2): el chip dice esto en vez de "Precio".
+ */
+export const DEAL_RATING_LABEL: Record<Exclude<DealRating, RatingColor>, string> = {
+  verify_data: "Verificar datos",
+  outdated: "Sin actualizar",
+};
+
+/** Etiquetas de antigüedad (§4.2): visibles en la card, nunca como "malo". */
+export const AGE_FLAG_LABEL: Record<AgeFlag, string> = {
+  old: "Aviso antiguo",
+  very_old: "Más de un año publicado",
+};
+
+export const LISTING_STATUS_LABEL: Partial<Record<ListingStatus, string>> = {
+  stale: "Sin actualizar",
+};
+
 /** Vocabulario público del request (spec §5 — "Request"). */
 export const REQUEST_VERTICAL_LABEL: Record<string, string> = {
   sale: "Venta",
   rent: "Alquiler",
   investment: "Inversión",
   temporary_rent: "Alquiler temporario",
+  land: "Lotes en venta",
 };
 
 export const ORDER_LABEL: Record<string, string> = {
@@ -91,6 +119,7 @@ export const ORDER_LABEL: Record<string, string> = {
   price_percentile_asc: "Bajo precio de zona",
   gross_yield_desc: "Mayor renta estimada",
   days_on_market_desc: "Más días publicadas",
+  distance_asc: "Cercanía",
 };
 
 /** Chips de atributos (solo si vienen informados en true). */
@@ -106,3 +135,26 @@ export const ATTRIBUTE_LABEL = {
 } as const;
 
 export type AttributeKey = keyof typeof ATTRIBUTE_LABEL;
+
+/* ---------------- Lotes (contrato 13/09 §4.4) ---------------- */
+
+export const LAND_CLASS_LABEL: Record<LandClass, string> = {
+  urban: "Lote urbano",
+  rural: "Lote rural",
+};
+
+export const LAND_SERVICE_LABEL: Record<LandService, string> = {
+  agua: "agua",
+  luz: "luz",
+  cloacas: "cloacas",
+  gas: "gas",
+  pavimento: "pavimento",
+};
+
+export const LAND_ZONING_LABEL: Record<LandZoning, string> = {
+  residential: "Zonificación residencial",
+  commercial: "Zonificación comercial",
+  industrial: "Zonificación industrial",
+  rural: "Zonificación rural",
+  mixed: "Zonificación mixta",
+};

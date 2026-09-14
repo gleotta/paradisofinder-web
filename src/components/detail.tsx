@@ -4,9 +4,11 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import type { ContactInfo, Publisher, Source } from "@/lib/p2/types";
+import type { Card, Source } from "@/lib/p2/types";
 import { PUBLISHER_LABEL } from "@/lib/labels";
+import { clean } from "@/lib/format";
 import { adoptTrackingSearch, detailHref, EVENTS, trackCardClick, trackEvent, type CardOrigin } from "@/lib/track";
+import ContactButton from "./ContactButton";
 
 /**
  * Emite "apertura de detalle" una vez por visita (cubre entradas directas por
@@ -20,17 +22,19 @@ export function DetailTracker({
   searchId,
   rank,
   from,
+  vertical = null,
 }: {
   propertyId: string;
   searchId: string | null;
   rank: number | null;
   from: CardOrigin | null;
+  vertical?: string | null;
 }) {
   // En dev, StrictMode monta dos veces y duplicaba el evento: se emite una vez
   // por propiedad (el ref sobrevive al remount simulado).
   const firedFor = useRef<string | null>(null);
   useEffect(() => {
-    adoptTrackingSearch(searchId);
+    adoptTrackingSearch(searchId, vertical);
     if (firedFor.current === propertyId) return;
     firedFor.current = propertyId;
     let referrer: string | null = null;
@@ -45,7 +49,7 @@ export function DetailTracker({
       from: from ?? (searchId ? "list" : "direct"),
       referrer,
     });
-  }, [propertyId, searchId, rank, from]);
+  }, [propertyId, searchId, rank, from, vertical]);
   return null;
 }
 
@@ -156,61 +160,35 @@ export function Gallery({ photos, alt }: { photos: string[]; alt: string }) {
   );
 }
 
-function waLink(number: string): string {
-  return `https://wa.me/${number.replace(/[^\d]/g, "")}`;
-}
-
-export function ContactActions({
-  propertyId,
-  contact,
-  publisher,
-}: {
-  propertyId: string;
-  contact: ContactInfo | null;
-  publisher: Publisher | null;
-}) {
+/**
+ * Contacto del detalle (T4): el botón "Consultar" es el mismo de la card
+ * (WhatsApp de la inmobiliaria → WhatsApp de FINDER → teléfono → aviso), con
+ * el mensaje precargado y `contact_click` medido; debajo, los canales
+ * secundarios que el aviso informa (teléfono, web), también medidos.
+ */
+export function ContactActions({ card, rank }: { card: Card; rank: number | null }) {
   const track = (channel: string) =>
-    trackEvent(EVENTS.CONTACT_CLICK, { property_id: propertyId, channel });
-
-  const hasAny = contact && (contact.whatsapp || contact.phone || contact.web);
+    trackEvent(EVENTS.CONTACT_CLICK, { property_id: card.id, channel, target: "agency", from: "detail", rank, position: rank });
+  const phone = clean(card.contact?.phone);
+  const web = clean(card.contact?.web);
 
   return (
     <>
-      <h2>Contacto</h2>
-      <p className="pub">{publisher ? PUBLISHER_LABEL[publisher] : "Publicante no informado"}</p>
-      {hasAny ? (
-        <div className="contact-actions">
-          {contact?.whatsapp && (
-            <a
-              className="btn btn-magenta"
-              href={waLink(contact.whatsapp)}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => track("whatsapp")}
-            >
-              WhatsApp
-            </a>
-          )}
-          {contact?.phone && (
-            <a className="btn btn-ghost" href={`tel:${contact.phone.replace(/\s/g, "")}`} onClick={() => track("phone")}>
-              Llamar · {contact.phone}
-            </a>
-          )}
-          {contact?.web && (
-            <a
-              className="btn btn-ghost"
-              href={contact.web}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => track("web")}
-            >
-              Sitio del publicante
-            </a>
-          )}
-        </div>
-      ) : (
-        <p className="pub">El aviso no informa datos de contacto directo; entrá al aviso original.</p>
-      )}
+      <h2>Consultar</h2>
+      <p className="pub">{card.publisher ? PUBLISHER_LABEL[card.publisher] : "Publicante no informado"}</p>
+      <div className="contact-actions">
+        <ContactButton card={card} rank={rank} from="detail" variant="detail" />
+        {phone && (
+          <a className="btn btn-ghost" href={`tel:${phone.replace(/\s/g, "")}`} onClick={() => track("phone")}>
+            Llamar · {phone}
+          </a>
+        )}
+        {web && (
+          <a className="btn btn-ghost" href={web} target="_blank" rel="noopener noreferrer" onClick={() => track("web")}>
+            Sitio del publicante
+          </a>
+        )}
+      </div>
     </>
   );
 }
@@ -220,21 +198,24 @@ export function SourceLinks({
   propertyId,
   sources,
   listingUrl,
+  rank = null,
 }: {
   propertyId: string;
   sources: Source[] | null;
   listingUrl: string | null;
+  rank?: number | null;
 }) {
   const track = (url: string | null) =>
-    trackEvent(EVENTS.SOURCE_CLICK, { property_id: propertyId, url });
+    trackEvent(EVENTS.SOURCE_CLICK, { property_id: propertyId, url, from: "detail", rank, position: rank });
 
-  if (!sources?.length && !listingUrl) return null;
+  const named = (sources ?? []).filter((s) => clean(s.name));
+  if (!named.length && !listingUrl) return null;
   return (
     <div className="contact-meta">
-      {sources?.map((s) => (
+      {named.map((s) => (
         <p key={`${s.name}-${s.id}`}>
-          Fuente: {s.url ? (
-            <a href={s.url} target="_blank" rel="noopener noreferrer" onClick={() => track(s.url)}>
+          Fuente: {clean(s.url) ? (
+            <a href={s.url!} target="_blank" rel="noopener noreferrer" onClick={() => track(s.url)}>
               {s.name} ↗
             </a>
           ) : (

@@ -29,6 +29,12 @@ interface Props {
   onSelect: (id: string) => void;
   /** Corrida de búsqueda vigente: el link del popup la hereda (`?s=`). */
   searchId: string | null;
+  /**
+   * Capa (T5): con la vertical `land` los markers son de lote (color tierra,
+   * etiqueta "Lote"); los pins de lote que llegan en una búsqueda de vivienda
+   * también se distinguen por `property_type`.
+   */
+  layer?: "homes" | "land";
 }
 
 /** Precio del pin: SIEMPRE el original, con sufijo de periodicidad en alquileres. */
@@ -41,10 +47,11 @@ function pinPrice(pin: MapPin): string {
 
 function markerIcon(L: typeof LType, pin: MapPin, active: boolean): LType.DivIcon {
   const label = compactPrice({ price: pin.price, currency: pin.currency ?? "ARS" });
+  const land = pin.property_type === "land";
   return L.divIcon({
     className: "price-marker-anchor",
     iconSize: [0, 0],
-    html: `<span class="price-marker${active ? " price-marker--active" : ""}">${label}</span>`,
+    html: `<span class="price-marker${land ? " price-marker--land" : ""}${active ? " price-marker--active" : ""}">${label}</span>`,
   });
 }
 
@@ -73,7 +80,7 @@ function popupHtml(pin: MapPin, searchId: string | null): string {
   return `<a class="map-pop map-pop--compact" href="${href}" target="_blank" rel="noopener" data-id="${pin.id}"><span class="map-pop-price">${pinPrice(pin)}</span><span class="map-pop-title">${title}</span><span class="map-pop-cta">Ver detalle ↗</span></a>`;
 }
 
-export default function ResultsMap({ pins, selectedId, onSelect, searchId }: Props) {
+export default function ResultsMap({ pins, selectedId, onSelect, searchId, layer = "homes" }: Props) {
   const divRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LType.Map | null>(null);
   const LRef = useRef<typeof LType | null>(null);
@@ -237,5 +244,13 @@ export default function ResultsMap({ pins, selectedId, onSelect, searchId }: Pro
     }
   }, [mapEpoch, selectedId, pins]);
 
-  return <div ref={divRef} className="leaflet-host" role="region" aria-label="Mapa de resultados" />;
+  return (
+    <div
+      ref={divRef}
+      className={`leaflet-host${layer === "land" ? " leaflet-host--land" : ""}`}
+      role="region"
+      aria-label={layer === "land" ? "Mapa de lotes" : "Mapa de resultados"}
+      data-layer={layer}
+    />
+  );
 }

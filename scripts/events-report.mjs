@@ -83,6 +83,7 @@ for (const ev of events) {
     case "search_error":
       s.error = p.message ?? p.stage ?? "error";
       break;
+    case "card_opened":
     case "card_clicked":
       s.clicks.push(`#${p.rank ?? "?"}${p.from && p.from !== "list" ? `(${p.from})` : ""}${p.score != null ? `·${p.score}` : ""}`);
       break;

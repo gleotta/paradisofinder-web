@@ -46,3 +46,7 @@ next-env.d.ts
 
 # CI/CD local (logs, estado, reportes, worktrees de verificación y config por máquina)
 /.ci/
+
+# Playwright (14/09): reportes, trazas y screenshots de las pruebas de interfaz
+/tests/e2e/.report/
+/tests/e2e/.artifacts*/

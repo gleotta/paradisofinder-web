@@ -1,6 +1,8 @@
 /**
- * Selector de vertical (Alquilar · Comprar · Invertir) — decisión de German
- * del 01/09, ver `docs/DECISION_2026-09-01_selector-vertical.md`.
+ * Selector de vertical (Alquilar · Comprar · Invertir · Lotes) — decisión de
+ * German del 01/09, ver `docs/DECISION_2026-09-01_selector-vertical.md`;
+ * Lotes agregado el 14/09 (`docs/DECISION_2026-09-14_qa-produccion.md`, T5)
+ * cuando P2 expuso la vertical `land`.
  *
  * La regla de producto 2 manda: **lo que escribe el usuario predomina** sobre
  * el botón. Cómo se aplica sin violarla (todo verificado contra P2 real):
@@ -8,8 +10,8 @@
  *    `vertical_override` (con `query` en sesión nueva el override PISA el
  *    texto entero: pierde zona y tipo). La composición vive en el route
  *    handler de /api/search/stream, que primero sondea la extracción
- *    determinística del texto crudo: si el texto ya fija alquiler/temporario,
- *    va crudo y el texto gana.
+ *    determinística del texto crudo: si el texto ya fija alquiler/temporario/
+ *    lotes, va crudo y el texto gana.
  *  - Después de cada búsqueda el botón se RE-SINCRONIZA con lo que P2
  *    realmente buscó (`summary` del evento `cards`), y esa re-sincronización
  *    actualiza la preferencia guardada.
@@ -21,16 +23,17 @@
 
 import type { Summary } from "./p2/types";
 
-export type VerticalId = "alquilar" | "comprar" | "invertir";
+export type VerticalId = "alquilar" | "comprar" | "invertir" | "lotes";
 
 export const VERTICALS: { id: VerticalId; label: string }[] = [
   { id: "alquilar", label: "Alquilar" },
   { id: "comprar", label: "Comprar" },
   { id: "invertir", label: "Invertir" },
+  { id: "lotes", label: "Lotes" },
 ];
 
 export function isVerticalId(v: unknown): v is VerticalId {
-  return v === "alquilar" || v === "comprar" || v === "invertir";
+  return v === "alquilar" || v === "comprar" || v === "invertir" || v === "lotes";
 }
 
 /**
@@ -38,6 +41,8 @@ export function isVerticalId(v: unknown): v is VerticalId {
  * El final es seguro: el extractor de P2 prioriza compra sobre alquiler sin
  * importar la posición ("casa en venta…, para alquilar" → Compra), así que un
  * texto que dice comprar/venta nunca pierde contra la frase de Alquilar.
+ * "lotes en venta" verificado 14/09: "en Santa Lucía hasta 30 mil dólares,
+ * lotes en venta" → `vertical: land` con zona y presupuesto intactos.
  */
 export const VERTICAL_PHRASE: Record<VerticalId, string> = {
   alquilar: "para alquilar",
@@ -45,6 +50,18 @@ export const VERTICAL_PHRASE: Record<VerticalId, string> = {
   // La frase del chip "Para renta": único camino real a "invertir" hoy
   // (compra + orden por rentabilidad).
   invertir: "para invertir y alquilar, ordenadas por renta",
+  lotes: "lotes en venta",
+};
+
+/**
+ * Valor de `vertical_override` (spec §3) para resolver el click del selector
+ * DENTRO de una sesión con resultados (preserva el criterio acumulado).
+ * "invertir" no tiene override real: va por frase (ver `changeVertical`).
+ */
+export const VERTICAL_OVERRIDE: Record<Exclude<VerticalId, "invertir">, string> = {
+  alquilar: "alquilar",
+  comprar: "comprar",
+  lotes: "lotes",
 };
 
 /**
@@ -56,7 +73,8 @@ export const VERTICAL_PHRASE: Record<VerticalId, string> = {
 export function verticalFromSummary(
   s: Pick<Summary, "vertical" | "order"> | null | undefined,
 ): VerticalId | null {
-  const label = s?.vertical?.trim().toLowerCase();
+  const label = s?.vertical?.trim().toLowerCase() ?? "";
+  if (/lote|terreno/.test(label)) return "lotes";
   if (label === "alquiler") return "alquilar";
   if (label === "compra") {
     return s?.order?.trim().toLowerCase() === "rentabilidad" ? "invertir" : "comprar";

@@ -1,5 +1,8 @@
 /**
- * Tipos del contrato P2 → P1 según docs/P1_INTEGRATION_SPEC.md (2026-08-30).
+ * Tipos del contrato P2 → P1 según docs/P1_INTEGRATION_SPEC.md (2026-08-30) +
+ * `API_CONTRACT.md` de P2 (2026-09-13: filtros duros, aclaración no terminal,
+ * vigencia/antigüedad, vertical de lotes, cercanía) — copia en
+ * `docs/API_CONTRACT_P2_2026-09-13.md`.
  * La fuente de verdad es el Swagger vivo de P2 (`http://localhost:8001/docs`) y la
  * colección Postman; ante diferencia, ganan Swagger/Postman.
  *
@@ -39,6 +42,23 @@ export type RentalPeriod = "day" | "week" | "month";
 
 /** null = NO EVALUADO → omitir, jamás "malo". */
 export type RatingColor = "green" | "yellow" | "red";
+
+/**
+ * `deal_rating` (API_CONTRACT 2026-09-13 §4.1): a los tres colores se suman
+ * `verify_data` (el gap real excede ±35 %: "verificar datos") y `outdated`
+ * (aviso `stale`, > 90 días sin actualizar: "sin actualizar").
+ */
+export type DealRating = RatingColor | "verify_data" | "outdated";
+
+/** Antigüedad del aviso (§4.2): > 180 días · > 365 días · null. */
+export type AgeFlag = "old" | "very_old";
+
+/** Vigencia de P3 (§4.2): `removed` nunca llega. */
+export type ListingStatus = "active" | "stale";
+
+export type LandClass = "urban" | "rural";
+export type LandService = "agua" | "luz" | "cloacas" | "gas" | "pavimento";
+export type LandZoning = "residential" | "commercial" | "industrial" | "rural" | "mixed";
 
 export type Publisher = "agency" | "owner";
 
@@ -135,7 +155,7 @@ export interface Card {
   score_badge_color?: string | null;
   /** Indicadores con tooltip explicativo (P3): mostrar tal cual. */
   secondary_indicators?: SecondaryIndicator[] | null;
-  deal_rating: RatingColor | null;
+  deal_rating: DealRating | null;
   /**
    * OJO: la clave real de P2 es `deal_rating_reasons` (verificado contra el
    * Swagger vivo 29/08); la spec §5 la nombraba genéricamente `*_reasons`.
@@ -161,12 +181,46 @@ export interface Card {
   comparables_count: number | null;
   zone_supply: number | null;
 
+  /** Días desde la publicación ORIGINAL: señal de negociación ("publicado hace X"). */
   days_on_market: number | null;
+  /** Días desde `listing_updated_at`: la frescura ("actualizado hace Y"). */
+  days_since_update?: number | null;
   listing_published_at: string | null;
   listing_updated_at: string | null;
+  /** `stale` solo entra cuando se pidió antigüedad explícita (§1). */
+  listing_status?: ListingStatus | null;
+  age_flag?: AgeFlag | null;
+  /** `composite` · `shared_or_partial` · `tiny_unit` — atípicos, score ≤ 40. */
+  atypical_flags?: string[] | null;
+  /** Solo con `order_code: distance_asc`: km al punto de `summary.near`. */
+  distance_km?: number | null;
+  location_confidence?: "high" | "medium" | "low" | null;
+  /** true = el gap real excede ±35 % → `deal_rating: verify_data`. */
+  valuation_gap_capped?: boolean | null;
+  has_covered_area?: boolean | null;
+  /** Score de P3 (trazabilidad): NO se muestra. */
+  p3_opportunity_score?: number | null;
 
   quality_tier: number | null;
   quality_score: number | null;
+
+  /* ---- Lote (§4.4; `property_type: "land"`, vertical `land`) ---- */
+  land_class?: LandClass | null;
+  land_class_confidence?: "high" | "medium" | "low" | null;
+  /** true declara servicios · false declara que NO · null no lo dice (NUNCA "sin servicios"). */
+  land_services?: boolean | null;
+  land_services_detail?: LandService[] | null;
+  in_subdivision?: boolean | null;
+  subdivision_name?: string | null;
+  /** USD/m² sobre superficie TOTAL (`area_sqm`). */
+  price_per_sqm_land?: number | null;
+  /** USD/ha — solo rurales. */
+  price_per_hectare?: number | null;
+  land_zoning?: LandZoning | null;
+  frontage_m?: number | null;
+  depth_m?: number | null;
+  /** "apto construcción" SOLO si el aviso lo dice. */
+  buildable?: boolean | null;
 
   /** Chips de atributos; null = no informado → omitir. */
   pool?: boolean | null;
@@ -238,8 +292,21 @@ export interface StructuredFilter {
   value: unknown;
 }
 
+export type RequestVertical = "sale" | "rent" | "investment" | "temporary_rent" | "land";
+
+export type OrderCode =
+  | "opportunity_score"
+  | "price_asc"
+  | "price_desc"
+  | "price_per_sqm_asc"
+  | "valuation_gap_desc"
+  | "price_percentile_asc"
+  | "gross_yield_desc"
+  | "days_on_market_desc"
+  | "distance_asc";
+
 export interface StructuredParams {
-  vertical?: "sale" | "rent" | "investment" | "temporary_rent";
+  vertical?: RequestVertical;
   zones?: string[];
   /** Filtro DURO. */
   property_type?: PropertyType;
@@ -265,17 +332,15 @@ export interface StructuredParams {
   /** Texto libre residual de la extracción; también pesa en el ranking. */
   semantic_query?: string;
   currency?: Currency;
+  budget_max?: number;
+  budget_min?: number;
   area_min_sqm?: number;
   filters?: StructuredFilter[];
-  order?:
-    | "opportunity_score"
-    | "price_asc"
-    | "price_desc"
-    | "price_per_sqm_asc"
-    | "valuation_gap_desc"
-    | "price_percentile_asc"
-    | "gross_yield_desc"
-    | "days_on_market_desc";
+  /** "cerca de X" (contrato 13/09): resuelto contra POIs y zonas; con `near` el orden default es `distance_asc`. */
+  near?: string;
+  /** Solo `vertical: land`: `urban` · `rural` · null (ambas). */
+  land_class?: LandClass;
+  order?: OrderCode;
   limit?: number;
   offset?: number;
   /** El Swagger puede sumar campos; se reenvían tal cual a /search/structured. */
@@ -345,6 +410,9 @@ export interface MapSearchRequest {
   currency?: string;
   area_min_sqm?: number;
   filters?: StructuredFilter[];
+  /** Aceptados desde el contrato del 13/09. */
+  place?: string;
+  land_class?: string;
 }
 
 /** Payload mínimo de un marker; el detalle se pide con GET /property/{id}. */
@@ -374,10 +442,10 @@ export interface MapSearchResponse {
 }
 
 /**
- * Campos que el endpoint acepta (whitelist: el resto da 422).
- * OJO: NO incluye `is_duplex` ni `place` — /search/map conservó su contrato en
- * el delta del 01/09. Un criterio con dúplex/barrio se mapea completo solo por
- * la forma (b) con `session_id` (la que usa la búsqueda simple).
+ * Campos que el endpoint acepta (whitelist: el resto da 422). Desde el
+ * contrato del 13/09 suma `place` y `land_class` (Swagger vivo verificado
+ * 14/09); sigue SIN `is_duplex`: un criterio con dúplex se mapea completo solo
+ * por la forma (b) con `session_id` (la que usa la búsqueda simple).
  */
 const MAP_REQUEST_FIELDS = [
   "vertical",
@@ -388,6 +456,8 @@ const MAP_REQUEST_FIELDS = [
   "currency",
   "area_min_sqm",
   "filters",
+  "place",
+  "land_class",
 ] as const;
 
 /**
@@ -426,11 +496,38 @@ export interface SessionResponse {
 export interface StreamRequest {
   session_id: string;
   query?: string;
-  /** "comprar" | "alquilar" | "invertir" (chips de clarificación). */
+  /** "comprar" | "alquilar" | "invertir" | "lotes" (chips de clarificación y selector en sesión). */
   vertical_override?: string;
   /** Default 20. */
   limit?: number;
   offset?: number;
+}
+
+/**
+ * Filtro DURO aplicado (API_CONTRACT 13/09 §3.2): uno por chip. `label` viene
+ * es-AR de P2 y se muestra tal cual; `field`/`value` sirven para la acción
+ * (quitar / editar) — ver `src/lib/interpretation.ts`.
+ */
+export interface HardFilter {
+  field: string;
+  operator: string;
+  value: unknown;
+  label: string;
+}
+
+/** Opción de relajación de la aclaración NO terminal (`few_results`). */
+export interface RelaxOption {
+  relax: string;
+  label: string;
+  count: number;
+}
+
+/** Copia de la aclaración no terminal que viaja dentro de `cards` (§3.1). */
+export interface ClarificationInfo {
+  reason: string;
+  message: string;
+  chips: string[];
+  options: RelaxOption[];
 }
 
 /** Ex `riepilogo` (renombrado el 29/08 — spec §5b). Textos ya localizados por P2. */
@@ -439,10 +536,21 @@ export interface Summary {
   zone: string | null;
   property_type: string | null;
   budget: string | null;
+  /** Etiqueta del orden REAL aplicado. */
   order: string | null;
   assumption_note: string | null;
   /** = total_matches REAL en DB. */
   total_results: number;
+  /* ---- contrato 13/09 (aditivos; opcionales por si el mock/instancia vieja no los manda) ---- */
+  order_code?: OrderCode | string;
+  hard_filters?: HardFilter[];
+  /** Blandos: ordenan, no filtran. */
+  soft_criteria?: string[];
+  /** Nombre resuelto de "cerca de X" (con `order_code: distance_asc`). */
+  near?: string | null;
+  land_class?: "urban" | "rural" | "both" | null;
+  /** true si entran avisos `stale` (se pidió antigüedad explícita). */
+  includes_outdated?: boolean;
 }
 
 export interface CardsEvent {
@@ -455,6 +563,8 @@ export interface CardsEvent {
   /** Solo en la última página del criterio (spec §2/§3). */
   related: Related | null;
   suggestions: string[] | null;
+  /** Copia de la aclaración NO terminal (`few_results`) o null (contrato 13/09). */
+  clarification?: ClarificationInfo | null;
   /** El spec §3 lo muestra, pero la instancia real no siempre lo manda. */
   content_language?: string;
 }
@@ -469,16 +579,42 @@ export interface DoneEvent {
     extractor?: string;
     narrativa?: string;
     latency_ms?: Record<string, number>;
+    pagination?: { limit: number; offset: number; returned: number; total_matches: number; has_more: boolean };
   } | null;
 }
 
+/**
+ * Dos formas (contrato 13/09 §3.3), distinguidas por `terminal`:
+ *  (a) terminal (default si falta): cierra el stream sin `cards`;
+ *  (b) NO terminal (`few_results`): llega DESPUÉS de `cards` cuando quedaron
+ *      menos de 3 resultados, con `options[]` (relajar UN filtro y su conteo);
+ *      el stream sigue con la narrativa y `done`.
+ */
 export interface ClarificationEvent {
   session_id: string;
   message: string;
   chips: string[];
   clarification_reason: string;
   nivel1_required: boolean;
+  terminal?: boolean;
+  options?: RelaxOption[];
   context: Record<string, unknown>;
+}
+
+/** Respuesta de `POST /search` (fallback sync, contrato §3.7): misma info que el stream, sin narrativa LLM. */
+export interface SyncSearchResponse {
+  session_id: string;
+  content_language?: string;
+  summary: Summary;
+  cards: Card[];
+  nivel1_required: boolean;
+  chips: string[] | null;
+  suggestions: string[] | null;
+  context: Record<string, unknown>;
+  /** Resumen template (es-AR). */
+  llm_response: string | null;
+  related: Related | null;
+  clarification: ClarificationInfo | null;
 }
 
 export interface StreamErrorEvent {

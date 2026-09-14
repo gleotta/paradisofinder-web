@@ -1,0 +1,116 @@
+[
+  {
+    "code": "capital",
+    "name": "Capital",
+    "slug": "capital",
+    "macro": "gran_san_juan"
+  },
+  {
+    "code": "rivadavia",
+    "name": "Rivadavia",
+    "slug": "rivadavia",
+    "macro": "gran_san_juan"
+  },
+  {
+    "code": "rawson",
+    "name": "Rawson",
+    "slug": "rawson",
+    "macro": "gran_san_juan"
+  },
+  {
+    "code": "santa_lucia",
+    "name": "Santa Lucía",
+    "slug": "santa-lucia",
+    "macro": "gran_san_juan"
+  },
+  {
+    "code": "chimbas",
+    "name": "Chimbas",
+    "slug": "chimbas",
+    "macro": "gran_san_juan"
+  },
+  {
+    "code": "pocito",
+    "name": "Pocito",
+    "slug": "pocito",
+    "macro": "gran_san_juan"
+  },
+  {
+    "code": "albardon",
+    "name": "Albardón",
+    "slug": "albardon",
+    "macro": "periferia"
+  },
+  {
+    "code": "angaco",
+    "name": "Angaco",
+    "slug": "angaco",
+    "macro": "periferia"
+  },
+  {
+    "code": "san_martin",
+    "name": "San Martín",
+    "slug": "san-martin",
+    "macro": "periferia"
+  },
+  {
+    "code": "nueve_de_julio",
+    "name": "9 de Julio",
+    "slug": "9-de-julio",
+    "macro": "periferia"
+  },
+  {
+    "code": "caucete",
+    "name": "Caucete",
+    "slug": "caucete",
+    "macro": "periferia"
+  },
+  {
+    "code": "veinticinco_de_mayo",
+    "name": "25 de Mayo",
+    "slug": "25-de-mayo",
+    "macro": "periferia"
+  },
+  {
+    "code": "sarmiento",
+    "name": "Sarmiento",
+    "slug": "sarmiento",
+    "macro": "periferia"
+  },
+  {
+    "code": "zonda",
+    "name": "Zonda",
+    "slug": "zonda",
+    "macro": "periferia"
+  },
+  {
+    "code": "ullum",
+    "name": "Ullum",
+    "slug": "ullum",
+    "macro": "periferia"
+  },
+  {
+    "code": "calingasta",
+    "name": "Calingasta",
+    "slug": "calingasta",
+    "macro": "alejado"
+  },
+  {
+    "code": "iglesia",
+    "name": "Iglesia",
+    "slug": "iglesia",
+    "macro": "alejado"
+  },
+  {
+    "code": "jachal",
+    "name": "Jáchal",
+    "slug": "jachal",
+    "macro": "alejado"
+  },
+  {
+    "code": "valle_fertil",
+    "name": "Valle Fértil",
+    "slug": "valle-fertil",
+    "macro": "alejado"
+  }
+]

@@ -10,11 +10,12 @@ import {
   type VerticalId,
 } from "@/lib/vertical";
 import { EVENTS, trackEvent } from "@/lib/track";
+import SearchSkeleton from "./SearchSkeleton";
 import VerticalSelector from "./VerticalSelector";
 
 /**
  * Placeholder y ejemplos por vertical — Set C "curado", elegido por German el
- * 01/09: cada frase luce un superpoder DISTINTO del lenguaje natural, y todas
+ * 01/09 (Lotes agregado el 14/09, T5): cada frase luce un superpoder DISTINTO del lenguaje natural, y todas
  * están validadas contra P2 real (extraen filtros/orden de verdad y devuelven
  * resultados). Ejemplos de lo que extraen: "quincho" → filtro `bbq_area`;
  * "mucho tiempo publicada, para negociar" → days_on_market > 90 + orden por
@@ -30,6 +31,7 @@ const PLACEHOLDER: Record<"none" | VerticalId, string> = {
   comprar:
     'Por ejemplo: "casa para una familia con chicos, con patio y cochera en Rivadavia, hasta 120 mil dólares"',
   invertir: 'Por ejemplo: "depto céntrico de hasta 60 mil dólares que se alquile fácil y rinda bien"',
+  lotes: 'Por ejemplo: "lote en loteo con servicios en Rivadavia, hasta 30 mil dólares"',
 };
 
 const EXAMPLES: Record<"none" | VerticalId, string[]> = {
@@ -53,6 +55,8 @@ const EXAMPLES: Record<"none" | VerticalId, string[]> = {
     "casa para refaccionar bien ubicada, para revender con ganancia",
     "lo más barato por m2 en Capital",
   ],
+  // Lotes (T5, 14/09): vertical `land` de P2 — validadas contra P2 real.
+  lotes: ["lotes en Santa Lucía", "terrenos hasta 30 mil dólares", "lotes en loteo con servicios"],
 };
 
 /**
@@ -66,6 +70,13 @@ export default function SearchHero() {
   const router = useRouter();
   const [text, setText] = useState("");
   const [activeChip, setActiveChip] = useState<string | null>(null);
+  /**
+   * T1: en cuanto se manda la consulta, ANTES de que la navegación a
+   * /buscar traiga el render del server, la home ya muestra "Buscando…" y
+   * el skeleton. En un celular con red lenta es la diferencia entre "pasa
+   * algo" y abandonar.
+   */
+  const [navigating, setNavigating] = useState<string | null>(null);
   // La preferencia guardada se lee como store externo (SSR renderiza null,
   // sin mismatch); lo que el usuario toca en ESTA pestaña la pisa.
   const stored = useSyncExternalStore(subscribeVertical, readStoredVertical, () => null);
@@ -96,6 +107,7 @@ export default function SearchHero() {
     const params = new URLSearchParams({ q: query });
     if (chip) params.set("chip", chip.id);
     if (vertical) params.set("v", vertical);
+    setNavigating(query);
     router.push(`/buscar?${params.toString()}`);
   }
 
@@ -128,6 +140,15 @@ export default function SearchHero() {
           Buscar
         </button>
       </form>
+
+      {navigating && (
+        <div className="hero-searching" aria-live="polite">
+          <p className="results-query results-query--searching" data-testid="searching-line">
+            <span className="spinner spinner--inline" aria-hidden /> Buscando… «{navigating}»
+          </p>
+          <SearchSkeleton count={2} />
+        </div>
+      )}
 
       <div className="chips-row" role="group" aria-label="Atajos de oportunidad">
         {chipsForVertical(vertical).map((chip) => (
