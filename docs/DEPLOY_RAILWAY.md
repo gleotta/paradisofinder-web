@@ -71,6 +71,30 @@ Railway aporta además `RAILWAY_GIT_COMMIT_SHA` (la muestra `/api/health` como `
    curl -sI https://finder.paradisoestate.com/api/health | head -1
    openssl s_client -connect finder.paradisoestate.com:443 -servername finder.paradisoestate.com </dev/null 2>/dev/null | openssl x509 -noout -subject
    ```
+
+   **Dominio principal: `paradisofinder.com` (15/09).** `finder.paradisoestate.com` sigue
+   cargado como Custom Domain, pero P1 lo **redirige con 301** a `https://paradisofinder.com`
+   con el mismo path y query, en todas las rutas (páginas, `/api`, assets, íconos, prefetch),
+   desde el principio de `src/proxy.ts`:
+   - El host sale de `x-forwarded-host` (primer valor; lo pone el edge de Railway) o, si no
+     está, de `host`, en minúsculas y sin puerto, con igualdad exacta. El dominio
+     `*.up.railway.app` y el healthcheck de Railway (`/api/health`) no se redirigen: el deploy
+     no depende de ningún dominio.
+   - El destino está fijo en el código, **no** en `SITE_URL`: con el host viejo cargado ahí
+     sería un loop. `SITE_URL` igual tiene que ser `https://paradisofinder.com` (canonical,
+     sitemap, Open Graph).
+   - `paradisofinder.com` pasa por **Cloudflare**, que cachea assets: el 301 sale con
+     `Cache-Control: private, max-age=86400` para que un pedido con `x-forwarded-host`
+     falsificado no deje un redirect guardado en Cloudflare para todos (sería un loop).
+   - **Precondición**: `paradisofinder.com` tiene que servir este mismo servicio con
+     certificado válido ANTES de deployar la redirección; si no, el dominio viejo queda
+     apuntando a un lugar caído. Comprobar antes y después:
+   ```bash
+   curl -sI https://paradisofinder.com/api/health | head -1                                    # HTTP/2 200 (un 301 acá = loop)
+   curl -sI "https://finder.paradisoestate.com/buscar?q=lotes" | grep -i "^HTTP\|^location"  # 301 → https://paradisofinder.com/buscar?q=lotes
+   ```
+   - Íconos: los browsers cachean mucho los favicons. Si después del deploy se sigue viendo
+     el ícono viejo, probar en ventana privada o abrir `/favicon.ico` directo.
 5. **Deploy.** Automático en cada push a `stage` (integración de GitHub). El pipeline
    local (`docs/CI_CD.md`) pone un gate adelante del push, verifica la misma imagen en
    local y hace el smoke contra la URL cuando Railway la promueve. Manual: `railway up`.

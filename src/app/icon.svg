@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- FINDER: "f" serif blanca + punto magenta (el de paradiso<b>finder</b>.com) sobre violeta.
+       La letra es un path y no un elemento de texto: no depende de las fuentes del sistema.
+       Grilla: 4 unidades = 1 px a 16 px (tallo, barra y pie caen en píxeles enteros).
+       Fuente de favicon.ico, apple-icon.png y public/icons/: npm run icons -->
+  <rect width="64" height="64" rx="14" fill="#4D1480"/>
+  <g id="glyph">
+    <path fill="#FFFFFF" d="M20 20H28V52H20Z M20 22C20 13 26 8 34 8C38 8 41 9 43.5 10.5L40 17.5C38.5 16.6 36.5 16 34.5 16C30.5 16 28 18 28 22Z M35 15.5a5.5 5.5 0 1 1 11 0a5.5 5.5 0 1 1 -11 0Z M12 24H36V28H12Z M16 48H32V52H16Z"/>
+    <circle cx="48" cy="48" r="6" fill="#EB4283"/>
+  </g>
+</svg>

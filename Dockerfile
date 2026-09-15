@@ -16,8 +16,8 @@ RUN npm ci --no-audit --no-fund
 FROM base AS build
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# `public/` está vacío en el repo (git no versiona directorios vacíos) y el COPY
-# de abajo lo exige.
+# `public/` hoy solo trae los íconos del manifest (`public/icons/`); el mkdir queda
+# por si se vacía (git no versiona directorios vacíos), porque el COPY de abajo lo exige.
 RUN mkdir -p public && npm run build
 
 # ---- runner: mínimo, no-root, healthcheck ----

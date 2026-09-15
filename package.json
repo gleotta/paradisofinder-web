@@ -15,7 +15,8 @@
     "seo:catalog": "node scripts/seo-catalog.mjs",
     "seo:warm": "node scripts/seo-warm.mjs",
     "qa:latency": "node scripts/qa-latency.mjs",
-    "events:report": "node scripts/events-report.mjs"
+    "events:report": "node scripts/events-report.mjs",
+    "icons": "node scripts/generate-icons.mjs"
   },
   "dependencies": {
     "leaflet": "^1.9.4",
