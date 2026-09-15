@@ -33,6 +33,7 @@ import {
 } from "@/lib/format";
 import { detailHref, EVENTS, trackCardClick, trackEvent, type CardOrigin } from "@/lib/track";
 import ContactButton from "./ContactButton";
+import ShareButton from "./ShareButton";
 import { RatingChip, ScoreDetails, SignalBadge } from "./signals";
 
 /** Chips visibles antes del "+N": 3 + "+N" entran en las 2 filas fijas de la ranura. */
@@ -183,6 +184,8 @@ function PropertyCardBase({
             ))}
           </div>
         )}
+        {/* Compartir (15/09): sobre la foto, abajo a la derecha (arriba van sellos y flags). */}
+        <ShareButton card={card} rank={rank} from={from} />
       </div>
 
       <div className="pcard-body">

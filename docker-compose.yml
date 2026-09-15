@@ -18,6 +18,7 @@ services:
       # Botón "Publicá tu propiedad": exportar CONTACT_WHATSAPP en el shell o en un .env junto a este archivo.
       CONTACT_WHATSAPP: ${CONTACT_WHATSAPP:-}
       EVENTS_LOG_DIR: /data/logs
+      CACHE_DIR: /data/cache
     volumes:
       - pfw-data:/data
     extra_hosts:

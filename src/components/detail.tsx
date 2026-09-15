@@ -9,6 +9,7 @@ import { PUBLISHER_LABEL } from "@/lib/labels";
 import { clean } from "@/lib/format";
 import { adoptTrackingSearch, detailHref, EVENTS, trackCardClick, trackEvent, type CardOrigin } from "@/lib/track";
 import ContactButton from "./ContactButton";
+import ShareButton from "./ShareButton";
 
 /**
  * Emite "apertura de detalle" una vez por visita (cubre entradas directas por
@@ -178,6 +179,7 @@ export function ContactActions({ card, rank }: { card: Card; rank: number | null
       <p className="pub">{card.publisher ? PUBLISHER_LABEL[card.publisher] : "Publicante no informado"}</p>
       <div className="contact-actions">
         <ContactButton card={card} rank={rank} from="detail" variant="detail" />
+        <ShareButton card={card} rank={rank} from="detail" variant="detail" />
         {phone && (
           <a className="btn btn-ghost" href={`tel:${phone.replace(/\s/g, "")}`} onClick={() => track("phone")}>
             Llamar · {phone}

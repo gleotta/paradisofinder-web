@@ -35,6 +35,7 @@ import { BackLink, ContactActions, DetailTracker, Gallery, MiniCardLink, SourceL
 import { isCardOrigin, isSearchId } from "@/lib/tracking-ids";
 import { isVerticalId } from "@/lib/vertical";
 import { siteUrl } from "@/lib/server/contact";
+import { propertyOgImageUrl, propertyShareUrl } from "@/lib/share";
 
 /**
  * Pantalla 3 — Detalle de propiedad (producto §6): página propia con URL por
@@ -58,14 +59,15 @@ export async function generateMetadata({
   const type = PROPERTY_TYPE_LABEL[p.property_type] ?? "Propiedad";
   const zone = zoneName(p.zone);
   // Open Graph (T6): título con precio y zona, imagen del aviso — lo que se
-  // ve al compartir la card por WhatsApp.
+  // ve al compartir la card por WhatsApp. La imagen se sirve desde el dominio
+  // (15/09, `src/app/og/propiedad/[file]/route.ts`), no desde el portal.
   const title = `${type} en ${zone} · ${mainPrice(p)}`;
   const description =
     clean(p.primary_signal?.text) ??
     clean(p.description)?.slice(0, 160) ??
     `${OPERATION_LABEL[p.operation]} en ${zone}, San Juan. Oportunidad inmobiliaria explicada por FINDER.`;
-  const photo = clean(p.photo_url);
-  const url = `${siteUrl()}/propiedad/${encodeURIComponent(p.id)}`;
+  const photo = clean(p.photo_url) ? propertyOgImageUrl(siteUrl(), p.id) : null;
+  const url = propertyShareUrl(siteUrl(), p.id);
   return {
     title,
     description,
@@ -77,7 +79,7 @@ export async function generateMetadata({
       type: "website",
       locale: "es_AR",
       siteName: "paradisofinder.com",
-      ...(photo ? { images: [{ url: photo, alt: `${type} en ${zone}` }] } : {}),
+      ...(photo ? { images: [{ url: photo, width: 1200, height: 630, alt: `${type} en ${zone}` }] } : {}),
     },
     twitter: {
       card: photo ? "summary_large_image" : "summary",

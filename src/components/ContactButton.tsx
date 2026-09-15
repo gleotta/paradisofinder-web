@@ -3,6 +3,7 @@
 import type { Card } from "@/lib/p2/types";
 import { PROPERTY_TYPE_LABEL } from "@/lib/labels";
 import { clean, mainPrice, zoneName } from "@/lib/format";
+import { propertyShareUrl } from "@/lib/share";
 import { EVENTS, trackEvent, type CardOrigin } from "@/lib/track";
 import { useContactConfig } from "./ContactConfig";
 
@@ -25,7 +26,7 @@ export function contactMessage(card: Card, siteUrl: string): string {
     `Hola, vi este aviso en paradisofinder.com y quiero consultar:`,
     `${type} en ${zoneName(card.zone)} · ${mainPrice(card)}`,
     ref ? `Ref. ${ref}` : null,
-    siteUrl ? `${siteUrl}/propiedad/${encodeURIComponent(card.id)}` : null,
+    siteUrl ? propertyShareUrl(siteUrl, card.id) : null,
   ].filter(Boolean);
   return parts.join("\n");
 }

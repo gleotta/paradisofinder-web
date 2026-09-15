@@ -66,6 +66,8 @@ export const EVENTS = {
   CONTACT_CLICK: "contact_click",
   /** Link secundario "Ver aviso original". */
   SOURCE_CLICK: "source_click",
+  /** 15/09: botón "Compartir" de la card o del detalle (`method`: native | copy). */
+  SHARE_CLICK: "share_click",
   /** Botón "Publicá tu propiedad" (WhatsApp para inmobiliarias/dueños). */
   PUBLISH_CONTACT: "publish_contact_click",
   MAP_TOGGLED: "map_toggled",

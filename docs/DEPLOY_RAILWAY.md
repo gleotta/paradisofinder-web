@@ -30,6 +30,9 @@ falta rebuild para cambiarlas; sí redeploy, que Railway hace solo al guardar).
 | `CONTACT_WHATSAPP` | `549264…` (solo dígitos) | Botón "Publicá tu propiedad". Vacío = no se muestra. |
 | `CONTACT_WHATSAPP_TEXT` | opcional | Texto prellenado. |
 | `EVENTS_LOG_DIR` | `/data/logs` (default del Dockerfile) | Con volumen montado en `/data`. Vacío = solo stdout (Railway Logs). |
+| `CACHE_DIR` | `/data/cache` (default del Dockerfile) | 15/09: snapshot de propiedades del sitemap (`property-sitemap.json`) y og:image propias (`og/<id>.jpg`). Vacío = solo memoria (el sitemap se rearma en cada deploy). |
+| `SITEMAP_P2_RPM` | opcional (default `12`) | Llamadas por minuto a `/search/structured` al rearmar el sitemap (~56 cada 6 h). Comparte el rate limit de búsqueda de P2 (30/min por IP) con los usuarios: no subirlo. |
+| `SITEMAP_REFRESH_HOURS` | opcional (default `6`) | Cada cuánto se rearma el snapshot de propiedades (en segundo plano, lo dispara el pedido a `/sitemap.xml`). |
 | `PORT` | **la inyecta Railway** (en este servicio, `8080`) y pisa el `PORT=3000` del Dockerfile | Next escucha en lo que diga `PORT`; el 3000 del Dockerfile es el default para Docker local. El **puerto destino** de los dominios (generado y propio) tiene que ser este valor: se ve al lado del dominio generado en Public Networking. Si se quiere fijar otro, declarar `PORT` en Variables y cambiar el puerto destino a la par (P2 hizo eso con `PORT=8000`). |
 
 Railway aporta además `RAILWAY_GIT_COMMIT_SHA` (la muestra `/api/health` como `version`).

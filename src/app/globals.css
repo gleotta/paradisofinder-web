@@ -805,6 +805,9 @@ img {
   inset: 0;
 }
 
+/* la foto también (15/09): tiene su propio link al detalle y el botón Compartir,
+   que con `isolation` en .pcard-photo no puede subir solo por encima del ::after */
+.pcard .pcard-photo,
 .pcard .signal,
 .pcard .ratings-row,
 .pcard .pcard-foot,
@@ -1222,6 +1225,42 @@ details.score summary .why {
   color: var(--purple);
   font-size: 13px;
   font-weight: 600;
+  white-space: nowrap;
+}
+
+/* --- compartir (15/09): ícono sobre la foto en la card, botón entero en el detalle --- */
+
+.btn-share {
+  font-weight: 600;
+}
+
+.btn-share--card {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 1;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 1px 3px rgba(36, 16, 50, 0.18);
+}
+
+.btn-share--detail {
+  width: 100%;
+  padding: 12px 18px;
+}
+
+.share-copied {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  background: var(--ink);
+  color: var(--white);
+  font-size: 12px;
+  line-height: 1;
+  padding: 6px 8px;
+  border-radius: 6px;
   white-space: nowrap;
 }
 
