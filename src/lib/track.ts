@@ -68,6 +68,8 @@ export const EVENTS = {
   SOURCE_CLICK: "source_click",
   /** 15/09: botón "Compartir" de la card o del detalle (`method`: native | copy). */
   SHARE_CLICK: "share_click",
+  /** 15/09: link "Abrir en Google Maps" del mapa del detalle. */
+  DETAIL_MAP_EXTERNAL: "detail_map_external_click",
   /** Botón "Publicá tu propiedad" (WhatsApp para inmobiliarias/dueños). */
   PUBLISH_CONTACT: "publish_contact_click",
   MAP_TOGGLED: "map_toggled",

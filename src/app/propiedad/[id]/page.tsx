@@ -31,6 +31,7 @@ import {
   zoneName,
 } from "@/lib/format";
 import { SignalBadge, ratingDotStyle } from "@/components/signals";
+import DetailMap from "@/components/DetailMap";
 import { BackLink, ContactActions, DetailTracker, Gallery, MiniCardLink, SourceLinks } from "@/components/detail";
 import { isCardOrigin, isSearchId } from "@/lib/tracking-ids";
 import { isVerticalId } from "@/lib/vertical";
@@ -301,6 +302,19 @@ export default async function PropertyPage({
                   </div>
                 ))}
               </dl>
+            </section>
+          )}
+
+          {/* 5b — Ubicación (15/09): solo con coordenadas de P2; "low" es solo la zona → sin mapa */}
+          {p.latitude != null && p.longitude != null && p.location_confidence !== "low" && (
+            <section className="dsection">
+              <h2>Ubicación</h2>
+              <DetailMap
+                propertyId={p.id}
+                latitude={p.latitude}
+                longitude={p.longitude}
+                confidence={p.location_confidence}
+              />
             </section>
           )}
 
