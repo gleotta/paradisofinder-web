@@ -29,6 +29,7 @@ falta rebuild para cambiarlas; sí redeploy, que Railway hace solo al guardar).
 | `P2_MODE` | `live` | Ya viene en el Dockerfile. Jamás `auto` en prod: degradaría a mocks en silencio si P2 cae. |
 | `CONTACT_WHATSAPP` | `549264…` (solo dígitos) | Botón "Publicá tu propiedad". Vacío = no se muestra. |
 | `CONTACT_WHATSAPP_TEXT` | opcional | Texto prellenado. |
+| `METRICS_TOKEN` | un valor propio de este entorno (`openssl rand -hex 24`) | Llave del tablero interno `/interno/embudo?token=…` (búsquedas → cards → card abierta → consulta, sobre el log de `EVENTS_LOG_DIR`). La imagen corre con `NODE_ENV=production`: **sin esta variable el tablero responde 404 siempre**. No reutilizar el del Docker local. Necesita el volumen en `/data`, o solo muestra lo ocurrido desde el último deploy. |
 | `EVENTS_LOG_DIR` | `/data/logs` (default del Dockerfile) | Con volumen montado en `/data`. Vacío = solo stdout (Railway Logs). |
 | `CACHE_DIR` | `/data/cache` (default del Dockerfile) | 15/09: snapshot de propiedades del sitemap (`property-sitemap.json`) y og:image propias (`og/<id>.jpg`). Vacío = solo memoria (el sitemap se rearma en cada deploy). |
 | `SITEMAP_P2_RPM` | opcional (default `12`) | Llamadas por minuto a `/search/structured` al rearmar el sitemap (~56 cada 6 h). Comparte el rate limit de búsqueda de P2 (30/min por IP) con los usuarios: no subirlo. |
@@ -46,7 +47,13 @@ Railway aporta además `RAILWAY_GIT_COMMIT_SHA` (la muestra `/api/health` como `
    `P2_BASE_URL` es `http://${{paradisofinder-core.RAILWAY_PRIVATE_DOMAIN}}:8000`
    (referencia entre servicios) o directamente `http://paradisofinder-core.railway.internal:8000`.
    Requiere que P1 esté en el **mismo proyecto y entorno** (`stage`) que P2.
-3. **Volumen (recomendado).** Service → Volumes → Add volume, mount path **`/data`**.
+3. **Volumen (recomendado).** No está en los Settings del servicio: se crea desde el lienzo del
+   proyecto (click derecho sobre el servicio o sobre el lienzo → Volume, o ⌘K → "Volume"), eligiendo
+   el servicio de P1 y mount path **`/data`**; queda dibujado como un disco pegado a la tarjeta del
+   servicio. Por CLI: `railway volume add --mount-path /data` (y `railway volume list` para ver si ya
+   existe). No se puede declarar en el `Dockerfile` (Railway no admite `VOLUME`), ni en `railway.json`,
+   y el `docker-compose.yml` es solo del Docker local. Con volumen, cada deploy tiene unos segundos de
+   corte (no pueden convivir dos instancias sobre el mismo disco).
    Sin volumen el log de eventos se pierde en cada deploy (queda en stdout).
    El entrypoint deja `/data/logs` escribible por el usuario no-root; alternativa
    de Railway si algo falla: variable `RAILWAY_RUN_UID=0` (corre como root).

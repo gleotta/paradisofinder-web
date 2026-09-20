@@ -44,9 +44,14 @@ test.describe("T7 métricas", () => {
   });
 
   test("el tablero interno muestra el embudo por día", async ({ page }) => {
-    const res = await page.goto("/interno/embudo");
-    // En producción exige METRICS_TOKEN: sin él es 404 y la prueba no aplica.
-    test.skip(res?.status() === 404, "tablero protegido por METRICS_TOKEN");
+    // En producción (Docker, Railway) exige METRICS_TOKEN: se pasa por el entorno de la
+    // prueba (`METRICS_TOKEN=… npx playwright test t7`). Sin él es 404 y la prueba no aplica.
+    const token = process.env.METRICS_TOKEN?.trim();
+    const res = await page.goto(token ? `/interno/embudo?token=${encodeURIComponent(token)}` : "/interno/embudo");
+    test.skip(!token && res?.status() === 404, "tablero protegido por METRICS_TOKEN (pasarlo por el entorno)");
+    expect(res?.status()).toBe(200);
+    // El token jamás abre con un valor equivocado.
+    if (token) expect((await page.request.get("/interno/embudo?token=no-es-el-token")).status()).toBe(404);
     await expect(page.locator("h1")).toHaveText("Embudo de uso");
     await expect(page.locator(".funnel-kpi").first()).toContainText("Búsquedas");
     await expect(page.locator(".funnel-table thead").first()).toContainText("Card abierta");

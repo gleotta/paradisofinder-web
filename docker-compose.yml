@@ -17,6 +17,9 @@ services:
       P2_MODE: live
       # Botón "Publicá tu propiedad": exportar CONTACT_WHATSAPP en el shell o en un .env junto a este archivo.
       CONTACT_WHATSAPP: ${CONTACT_WHATSAPP:-}
+      # Tablero interno /interno/embudo?token=…: la imagen corre con NODE_ENV=production, así que sin
+      # token responde 404. Definir METRICS_TOKEN en el .env junto a este archivo (openssl rand -hex 24).
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
       EVENTS_LOG_DIR: /data/logs
       CACHE_DIR: /data/cache
     volumes:
