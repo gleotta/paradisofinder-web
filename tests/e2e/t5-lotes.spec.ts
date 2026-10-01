@@ -18,7 +18,7 @@ test.describe("T5 lotes", () => {
     await example.click();
     await expect(page).toHaveURL(/v=lotes/);
     await expect(cards(page).first()).toBeVisible({ timeout: 45_000 });
-    await expect(cards(page).first().locator(".pbadge--land")).toHaveText("Lote");
+    await expect(cards(page).first().locator(".pbadge--land")).toHaveText(/^Lote( urbano| rural)?$/);
     await expect(page.getByTestId("interpretation").locator('.ichip[data-field="vertical"]')).toContainText(/Lote/);
     await expect(page.getByRole("button", { name: "Lotes", exact: true }).last()).toHaveAttribute("aria-pressed", "true");
 

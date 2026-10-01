@@ -39,7 +39,7 @@
         "condition": "good",
         "opportunity_score": 82,
         "score_components": [
-          { "key": "valuation_gap", "label": "Precio vs. zona", "value": 34, "weight": 0.4, "raw_value": -14.5, "raw_unit": "%", "description": "Publicado 14,5% por debajo de comparables de Capital" },
+          { "key": "valuation_gap", "label": "Precio vs. zona", "value": 34, "weight": 0.4, "raw_value": 14.5, "raw_unit": "%", "description": "Publicado 14,5% por debajo de comparables de Capital" },
           { "key": "gross_yield", "label": "Renta bruta estimada", "value": 28, "weight": 0.3, "raw_value": 8.4, "raw_unit": "%", "description": "Renta bruta anual estimada de 8,4%" }
         ],
         "primary_signal": { "text": "14,5% bajo comparables de la zona", "type": "valuation_gap", "color": "green" },
@@ -51,7 +51,7 @@
         "rental_investment_reasons": [ { "code": "avg_yield", "text": "Renta estimada en línea con la zona" } ],
         "market_context": "Capital concentra la mayor oferta de departamentos en venta de la provincia",
         "gross_yield_pct": 8.4,
-        "valuation_gap_pct": -14.5,
+        "valuation_gap_pct": 14.5,
         "price_percentile": 22,
         "estimated_monthly_rent": 455,
         "rent_to_price_ratio": 0.7,
@@ -105,7 +105,7 @@
         "rental_investment_reasons": [ { "code": "high_yield", "text": "Renta estimada por encima de la mediana de la zona" } ],
         "market_context": null,
         "gross_yield_pct": 9.1,
-        "valuation_gap_pct": -1.8,
+        "valuation_gap_pct": 1.8,
         "price_percentile": 48,
         "estimated_monthly_rent": 352,
         "rent_to_price_ratio": 0.76,

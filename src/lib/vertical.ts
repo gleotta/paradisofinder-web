@@ -69,15 +69,24 @@ export const VERTICAL_OVERRIDE: Record<Exclude<VerticalId, "invertir">, string> 
  * al id del selector. null = sin equivalente (p. ej. "Alquiler temporario"):
  * el selector queda sin selección para no mentir, y la preferencia guardada
  * no se toca.
+ *
+ * Invertir = Compra ordenada por rentabilidad. Se decide por el CÓDIGO del
+ * orden (`order_code`, contrato 13/09), que es estable; la etiqueta es texto
+ * de P2 y cambió ("Rentabilidad" → "Rentabilidad (mayor a menor)", visto el
+ * 29/09 contra P2 real: con la comparación exacta Invertir volvía a Comprar
+ * después de cada búsqueda). Sin código, vale la etiqueta.
  */
 export function verticalFromSummary(
-  s: Pick<Summary, "vertical" | "order"> | null | undefined,
+  s: Pick<Summary, "vertical" | "order" | "order_code"> | null | undefined,
 ): VerticalId | null {
   const label = s?.vertical?.trim().toLowerCase() ?? "";
   if (/lote|terreno/.test(label)) return "lotes";
   if (label === "alquiler") return "alquilar";
   if (label === "compra") {
-    return s?.order?.trim().toLowerCase() === "rentabilidad" ? "invertir" : "comprar";
+    const byYield = s?.order_code
+      ? s.order_code === "gross_yield_desc"
+      : /^rentabilidad\b/.test(s?.order?.trim().toLowerCase() ?? "");
+    return byYield ? "invertir" : "comprar";
   }
   return null;
 }

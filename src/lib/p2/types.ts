@@ -47,6 +47,10 @@ export type RatingColor = "green" | "yellow" | "red";
  * `deal_rating` (API_CONTRACT 2026-09-13 §4.1): a los tres colores se suman
  * `verify_data` (el gap real excede ±35 %: "verificar datos") y `outdated`
  * (aviso `stale`, > 90 días sin actualizar: "sin actualizar").
+ * Desde el 30/09 (respuesta de P2 §3.3.1, `docs/RESPUESTA_P2_A_P1_2026-09-30.md`)
+ * un ALQUILER más de 35 % por encima de sus similares es `red` (primer motivo
+ * `sobreprecio`), no `verify_data`: llega con `valuation_gap_capped: true` y
+ * gap −35. En alquiler `verify_data` queda solo para > +35 %.
  */
 export type DealRating = RatingColor | "verify_data" | "outdated";
 
@@ -109,6 +113,62 @@ export interface ContactInfo {
   web: string | null;
 }
 
+/** Celda zonal de un lote en el contrato del 13/09 (precursora de `ZoneRef`). */
+export interface ZoneStatsRef {
+  bucket: string;
+  median_price_per_sqm: number | null;
+  median_price_per_hectare: number | null;
+  sample: number | null;
+  fallback: string | null;
+  /** Nombre del nivel cuando hay fallback ("gran_san_juan"). */
+  fallback_ref?: string | null;
+}
+
+/** Tendencia del aviso: la marca P3 en dólares, P2 la pasa (guía 29/09, C6). */
+export type PriceTrend = "up" | "down";
+
+/** Tendencia de la celda zonal (P3): solo precio, umbral y ventana de P3. */
+export type ZoneTrend = "up" | "down" | "flat";
+
+/**
+ * Referencia de zona del aviso (pedido a P2 del 29/09, §3.2; entregada el
+ * 30/09, `docs/RESPUESTA_P2_A_P1_2026-09-30.md`): la celda de la semana
+ * vigente para su zona, operación y bucket. Es referencia, NO comparación: la
+ * card la muestra sin porcentaje contra el aviso (C3). Interpretaciones de
+ * P2: un valor de referencia por celda (mensual en alquiler, hectárea en
+ * lotes rurales, m² en el resto) y propia o fallback se decide sobre ESE
+ * valor; sin mezclar con la celda `todos`; habitaciones y tarifas por día o
+ * semana → null.
+ */
+export interface ZoneRef {
+  /** Código ("santa_lucia"). */
+  zone: string;
+  /** `house` · `apartment` (tipo de la celda) · `land` en lotes · null si la serie zonal todavía no distingue tipo. */
+  property_type: PropertyType | null;
+  /** "1" | "2" | "3" | "4plus" | "lote_urbano" | "lote_rural" | "lote_rural_srv". */
+  bucket: string;
+  /** Vivienda en venta y lotes urbanos (USD). */
+  median_price_per_sqm: number | null;
+  /** Lotes rurales (USD). */
+  median_price_per_hectare: number | null;
+  /** Alquiler mensual (USD) — no se muestra en la card de alquiler (decisión 15). */
+  median_price: number | null;
+  /** Avisos detrás del valor de referencia que se sirve. */
+  sample: number | null;
+  /** ≠ null = la zona no llega a la muestra mínima y los valores son de ese nivel. */
+  fallback: "macro_zona" | "provincia" | null;
+  /** Nombre del nivel cuando hay fallback ("gran_san_juan"). */
+  fallback_ref?: string | null;
+  trend: ZoneTrend | null;
+  trend_pct: number | null;
+  /** Semanas entre las dos puntas comparadas (2 el 01/10; sube con las corridas). */
+  trend_weeks: number | null;
+  /** Rentabilidad promedio de la zona (solo venta de vivienda). */
+  cap_pct: number | null;
+  /** Lunes ISO de la celda. */
+  week: string;
+}
+
 /** Card de resultado — shape §5 de la spec. null = no informado → omitir (nunca 0). */
 export interface Card {
   id: string;
@@ -143,6 +203,7 @@ export interface Card {
   bedrooms: number | null;
   bathrooms: number | null;
   rooms: number | null;
+  /** Superficie total; null = no informada (nunca 0: P2 lo pasó de 0 a null el 30/09). */
   area_sqm: number | null;
   covered_area_sqm?: number | null;
   floor?: number | null;
@@ -195,11 +256,35 @@ export interface Card {
   /** Solo con `order_code: distance_asc`: km al punto de `summary.near`. */
   distance_km?: number | null;
   location_confidence?: "high" | "medium" | "low" | null;
-  /** true = el gap real excede ±35 % → `deal_rating: verify_data`. */
+  /**
+   * true = el gap real excede ±35 % y el mostrado está acotado. Va con
+   * `verify_data`, SALVO el alquiler caro (gap −35, `red`; P2 30/09): por eso
+   * "verificar el aviso" se decide por `deal_rating`, no por este flag.
+   */
   valuation_gap_capped?: boolean | null;
   has_covered_area?: boolean | null;
   /** Score de P3 (trazabilidad): NO se muestra. */
   p3_opportunity_score?: number | null;
+
+  /* ---- Cards por vertical (guía 29/09): aditivos, null hasta que P2/P3 los entreguen ---- */
+  /** Tendencia del aviso (P3 → P2). null = sin cambio registrado. */
+  price_trend?: PriceTrend | null;
+  /** Precio anterior nominal, en `currency` del aviso (para "antes $ 480.000"). */
+  previous_price?: number | null;
+  previous_price_usd?: number | null;
+  /** Variación en USD, con signo (−8.3). */
+  price_change_pct?: number | null;
+  /** Fecha ISO del cambio. */
+  price_changed_at?: string | null;
+  zone_ref?: ZoneRef | null;
+  /**
+   * Lotes (contrato 13/09 §4.4): la celda zonal que P2 usó para el gap del
+   * lote. YA llega; mientras `zone_ref` no exista, el bloque Zona de Lotes
+   * sale de acá (sin tendencia).
+   */
+  zone_stats_ref?: ZoneStatsRef | null;
+  /** Alquiler: renta estimada en pesos (P2 convierte con la tasa de la corrida). Solo detalle. */
+  estimated_monthly_rent_ars?: number | null;
 
   quality_tier: number | null;
   quality_score: number | null;
@@ -255,16 +340,44 @@ export interface Card {
   relevance_score?: number | null;
 }
 
-/** Comparable del detalle (shape mínima según spec §4; Swagger manda). */
+/**
+ * Comparable del detalle (Swagger manda). Desde el 30/09 (respuesta de P2
+ * §3.3.4) es un aviso del MISMO conjunto con el que P3 midió el precio, y
+ * suma dormitorios, cubierta y US$/m².
+ */
 export interface MiniCard {
   id?: string | null;
   zone: string | null;
+  /** Superficie total; null = no informada (nunca 0). */
   area_sqm: number | null;
   price: number;
-  currency: Currency;
+  currency: Currency | null;
   price_usd: number | null;
   property_type?: PropertyType | null;
   operation?: Operation | null;
+  bedrooms?: number | null;
+  covered_area_sqm?: number | null;
+  /** USD/m² sobre la MISMA base con que se compara: cubierta en vivienda, total en lotes. null sin esa superficie. */
+  price_per_sqm?: number | null;
+  /** Llega; no se muestra (regla de producto 13 c). */
+  opportunity_score?: number | null;
+}
+
+/**
+ * El conjunto de similares del detalle (respuesta de P2 30/09-01/10 §3.3.4).
+ * `count` = `comparables_count` de la card; hasta 30 con banda de superficie
+ * (venta de vivienda y lotes) y SIN tope en alquiler por dormitorios (hoy
+ * hasta 274). `count = listed + not_listed`: `not_listed` son los avisos del
+ * conjunto que no se muestran (tier 0: sin foto o sin superficie) — en
+ * alquiler, casi la mitad.
+ */
+export interface ComparablesPool {
+  /** Hasta dónde hubo que ampliar para juntar avisos similares. */
+  scope: "zone" | "adjacent_zones" | "macro_zone" | string;
+  count: number;
+  /** Cuántos van en `comparables`: todos los que se pueden mostrar. */
+  listed: number;
+  not_listed: number;
 }
 
 /** PropertyDetail ⊃ Card + campos propios del detalle. */
@@ -276,7 +389,14 @@ export interface PropertyDetail extends Card {
 
 export interface PropertyDetailResponse {
   property: PropertyDetail;
+  /**
+   * Todos los avisos del conjunto que se pueden mostrar, por precio en USD:
+   * hasta 30 en venta y lotes, sin tope en alquiler (P2 01/10; antes eran 3).
+   * Si la sección tiene que ser corta, el recorte es de P1.
+   */
   comparables: MiniCard[] | null;
+  /** null = el aviso no tiene con qué compararse. */
+  comparables_pool?: ComparablesPool | null;
   score_components: ScoreComponent[] | null;
   content_language: string;
 }

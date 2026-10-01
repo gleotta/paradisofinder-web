@@ -3,7 +3,9 @@ import { cards, FORBIDDEN, search } from "./helpers";
 
 /**
  * T3 — Card honesta: cero "None"/"null"/"unknown" en 200 cards, fechas,
- * etiquetas, moneda, lotes, score con razón, Consultar en el 100 %.
+ * etiquetas, moneda, lotes, Consultar en el 100 %. Desde el 29/09 la card no
+ * muestra el score (vive explicado en el detalle): lo que compara el aviso es
+ * el bloque de posición — ver `cards-*.spec.ts`.
  */
 const QUERIES = [
   "casa en rawson",
@@ -58,18 +60,17 @@ test.describe("T3 card", () => {
     expect(withoutContact, "cards sin Consultar").toBe(0);
   });
 
-  test("precio en la moneda del aviso con conversión, dos fechas y score con su razón", async ({ page }) => {
+  test("precio en la moneda del aviso con conversión, fechas y posición explicada", async ({ page }) => {
     await search(page, "casa en rawson");
     const card = cards(page).first();
     await expect(card.locator(".pcard-price")).toContainText(/\$/);
     // Fechas relativas (las que P2 informa).
-    await expect(card.locator(".pcard-dates")).toContainText(/publicado|actualizado/);
-    // Score nunca solo: la primera razón visible al lado.
-    const score = card.locator("details.score");
-    if (await score.count()) {
-      await expect(score.locator(".score-reason")).not.toBeEmpty();
-      await score.locator("summary").click();
-      await expect(score.locator(".score-comp").first()).toBeVisible();
+    await expect(card.locator(".pcard-dates")).toContainText(/Publicado|Actualizado/);
+    // Ninguna señal sin explicación: el porcentaje va con contra qué se comparó.
+    await expect(card.locator("details.score")).toHaveCount(0);
+    const position = card.getByTestId("position");
+    if (await position.count()) {
+      await expect(position.locator(".posblock-sub")).toContainText(/ en \S/);
     }
     // Conversión entre paréntesis cuando P2 la manda.
     const refs = await card.locator(".pcard-price-refs").innerText();
@@ -79,7 +80,7 @@ test.describe("T3 card", () => {
   test("lotes: m² de lote, precio por m², sin campos de vivienda", async ({ page }) => {
     await search(page, "lotes en Santa Lucía");
     const card = cards(page).first();
-    await expect(card.locator(".pbadge--land")).toHaveText("Lote");
+    await expect(card.locator(".pbadge--land")).toHaveText(/^Lote( urbano| rural)?$/);
     await expect(card.locator(".pcard-specs")).toContainText(/m² de lote|ha/);
     await expect(card.locator(".pcard-specs")).not.toContainText(/dorm|baño/);
     // Las etiquetas PROPIAS de P1 nunca dicen "sin servicios" (null ≠ no tiene);

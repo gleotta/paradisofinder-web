@@ -3,61 +3,57 @@
 import Link from "next/link";
 import { memo, useState } from "react";
 import type { Card } from "@/lib/p2/types";
+import { AGE_FLAG_LABEL, LAND_CLASS_LABEL, LISTING_STATUS_LABEL, PROPERTY_TYPE_LABEL, PUBLISHER_LABEL } from "@/lib/labels";
 import {
-  AGE_FLAG_LABEL,
-  ATTRIBUTE_LABEL,
-  CONDITION_LABEL,
-  LAND_CLASS_LABEL,
-  LAND_ZONING_LABEL,
-  LISTING_STATUS_LABEL,
-  PROPERTY_TYPE_LABEL,
-  PUBLISHER_LABEL,
-  RATING_LABEL,
-  RATING_LABEL_SHORT,
-  ROOM_CLASS_LABEL,
-  type AttributeKey,
-} from "@/lib/labels";
-import {
+  cardChips,
+  cardDates,
+  cardVertical,
   clean,
-  dealReasons,
-  fmtAgo,
+  estimateInfo,
   fmtKm,
-  fmtPct,
-  landServicesLabel,
   mainPrice,
+  positionInfo,
   pricePerSqm,
+  priceTrendInfo,
   roomSpecsLine,
   secondaryPrice,
   specsLine,
   zoneName,
+  zoneRefInfo,
 } from "@/lib/format";
 import { detailHref, EVENTS, trackCardClick, trackEvent, type CardOrigin } from "@/lib/track";
 import ContactButton from "./ContactButton";
 import ShareButton from "./ShareButton";
-import { RatingChip, ScoreDetails, SignalBadge } from "./signals";
+import { EstimateBlock, EstimateNotice, PositionBlock, TrendPill, ZoneBlock } from "./signals";
 
-/** Chips visibles antes del "+N": 3 + "+N" entran en las 2 filas fijas de la ranura. */
+/** Chips visibles antes del "+N" (guía 29/09 §2.3). */
 const MAX_CHIPS = 3;
 
 /**
- * Card de resultado según las reglas de display de la spec §5 y la "card
- * honesta" del 14/09 (T3/T4 — `docs/DECISION_2026-09-14_qa-produccion.md`):
- *  - precio original SIEMPRE primero, conversión entre paréntesis con los
- *    campos de P2 (`price_usd` / `price_ars`), nunca calculada acá;
- *  - NADA de "None"/"null"/"unknown": todo string pasa por `clean()` y la
- *    línea que no tiene dato no se muestra (la ranura queda vacía);
- *  - dos fechas: "publicado hace X" (`days_on_market`, señal de negociación) y
- *    "actualizado hace Y" (`days_since_update`, frescura); etiquetas visibles
- *    de `age_flag` y `listing_status: stale`; `deal_rating` con `verify_data`
- *    / `outdated`; `quality_tier` alto = sello "Datos completos", bajo = solo
- *    menos énfasis visual (nunca "calidad baja");
- *  - lotes: m² de lote, precio/m² de lote, clase, servicios (solo `true`),
- *    loteo, sin campos de vivienda; `distance_km` cuando el orden es cercanía;
- *  - score SIEMPRE con su primera razón; desplegable con todos los componentes;
- *  - botón "Consultar" propio y medido antes que "Ver aviso original".
+ * Card de resultado POR VERTICAL (29/09 —
+ * `docs/GUIA_P1_2026-09-29_cards-por-vertical.md`; el porqué de cada decisión
+ * está en `docs/PLAN_2026-09-29_cards-por-vertical.md`). P3 calcula, P2
+ * expone, P1 muestra:
+ *  - una sola comparación por card: el bloque de posición contra similares
+ *    (porcentaje, barra de percentil, "ver similares"); SOLO VERDE, nunca
+ *    rojo: verde con `deal_rating: green`, neutro todo lo demás;
+ *  - flecha de tendencia del aviso sobre la foto; bloque Zona en Comprar,
+ *    Lotes e Invertir (verde si la zona sube); en Invertir, además, "Esta
+ *    propiedad · estimación", siempre neutro;
+ *  - sin score, semáforos, contexto de mercado ni "Datos completos": siguen
+ *    llegando y se ven explicados en el detalle;
+ *  - cada bloque se renderiza SOLO si el campo llega (null = no informado):
+ *    la card sale con lo que P2 manda hoy y va encendiendo bloques;
+ *  - aviso de estimación en toda card; ninguna sigla ni nombre interno.
  *
- * ALTURA UNIFORME (pedido de German, 05/09): cada bloque es una "ranura" de
- * alto fijo que se renderiza aunque el dato falte (vacía, invisible).
+ * Sigue valiendo la "card honesta" del 14/09 (T3/T4): precio original primero
+ * y conversión solo con los campos de P2, nada de "None"/"null"/"unknown"
+ * (`clean()`), lotes sin campos de vivienda, "Consultar" antes que "Ver aviso
+ * original".
+ *
+ * ALTURA: los bloques miden lo que su contenido (decisión de German del
+ * 29/09); las cards de una misma fila se emparejan estirándose en la grilla,
+ * con las acciones ancladas abajo.
  */
 function PropertyCardBase({
   card,
@@ -72,7 +68,7 @@ function PropertyCardBase({
   searchId?: string | null;
   /** Posición en el listado (1 = primera), o en el bloque de similares. */
   rank?: number | null;
-  /** Vertical vigente (viaja al detalle para la analítica). */
+  /** Vertical vigente: decide el layout (junto con el aviso) y viaja al detalle. */
   vertical?: string | null;
 }) {
   const [photoFailed, setPhotoFailed] = useState(false);
@@ -83,6 +79,7 @@ function PropertyCardBase({
   const from: CardOrigin = similar ? "related" : "list";
   const href = detailHref(card.id, { searchId, rank, from, vertical });
   const onOpen = () => trackCardClick(card, from, rank);
+  const layout = cardVertical(card, vertical);
   const isRoom = card.property_type === "room";
   const isLand = card.property_type === "land";
   const title = `${PROPERTY_TYPE_LABEL[card.property_type] ?? "Propiedad"} en ${zoneName(card.zone)}`;
@@ -93,55 +90,24 @@ function PropertyCardBase({
   const distance = card.distance_km != null ? `a ${fmtKm(card.distance_km)}` : null;
   const priceRefs = [secondary ? `(${secondary})` : null, sqm].filter(Boolean).join(" · ");
   const photoUrl = clean(card.photo_url);
-  const marketContext = clean(card.market_context);
   const listingUrl = clean(card.listing_url);
   const sourceName = clean(card.sources?.[0]?.name);
 
-  /* ---- chips de atributos (solo lo informado en true / con valor real) ---- */
-  const attrs: string[] = [];
-  if (isLand) {
-    if (card.land_class) attrs.push(LAND_CLASS_LABEL[card.land_class]);
-    const services = landServicesLabel(card);
-    if (services) attrs.push(services);
-    if (card.in_subdivision === true) {
-      const name = clean(card.subdivision_name);
-      attrs.push(name ? `En loteo ${name}` : "Dentro de loteo");
-    }
-    if (card.buildable === true) attrs.push("Apto construcción");
-    if (card.land_zoning && LAND_ZONING_LABEL[card.land_zoning]) attrs.push(LAND_ZONING_LABEL[card.land_zoning]);
-  } else {
-    for (const key of Object.keys(ATTRIBUTE_LABEL) as AttributeKey[]) {
-      if (card[key] === true) attrs.push(ATTRIBUTE_LABEL[key]);
-    }
-    if (isRoom && card.room_class) attrs.unshift(ROOM_CLASS_LABEL[card.room_class]);
-    if (card.condition && card.condition !== "unknown" && CONDITION_LABEL[card.condition]) {
-      attrs.push(CONDITION_LABEL[card.condition]);
-    }
-    if (card.operation === "sale" && card.gross_yield_pct != null) {
-      attrs.push(`Renta est. ${fmtPct(card.gross_yield_pct)}`);
-    }
-  }
-  const soft = (card.semantic_qualities ?? []).map(clean).filter((s): s is string => !!s);
-  const chips = [...attrs.map((label) => ({ label, soft: false })), ...soft.map((label) => ({ label, soft: true }))];
+  const trend = priceTrendInfo(card);
+  const position = positionInfo(card);
+  const zone = zoneRefInfo(card, layout);
+  const estimate = layout === "invertir" ? estimateInfo(card) : null;
+  const dates = cardDates(card);
+
+  const chips = cardChips(card, layout);
   const visibleChips = allChips ? chips : chips.slice(0, MAX_CHIPS);
   const hiddenChips = chips.length - visibleChips.length;
 
-  /* ---- etiquetas de antigüedad / vigencia / calidad (sobre la foto) ---- */
-  const flags: { label: string; tone: "warn" | "ok" }[] = [];
-  if (card.listing_status === "stale") flags.push({ label: LISTING_STATUS_LABEL.stale!, tone: "warn" });
-  else if (card.age_flag && AGE_FLAG_LABEL[card.age_flag]) flags.push({ label: AGE_FLAG_LABEL[card.age_flag], tone: "warn" });
-  if ((card.quality_tier ?? 0) >= 3) flags.push({ label: "Datos completos", tone: "ok" });
+  /* ---- etiquetas de antigüedad / vigencia (sobre la foto, sin color de alarma) ---- */
+  const flags: string[] = [];
+  if (card.listing_status === "stale") flags.push(LISTING_STATUS_LABEL.stale!);
+  else if (card.age_flag && AGE_FLAG_LABEL[card.age_flag]) flags.push(AGE_FLAG_LABEL[card.age_flag]);
   const lowTier = card.quality_tier != null && card.quality_tier <= 1;
-
-  /* ---- fechas ---- */
-  const dates = [
-    card.days_on_market != null ? `publicado ${fmtAgo(card.days_on_market)}` : null,
-    card.days_since_update != null ? `actualizado ${fmtAgo(card.days_since_update)}` : null,
-  ].filter(Boolean);
-
-  const showRatings =
-    card.deal_rating != null ||
-    (card.operation === "sale" && (card.resale_investment_rating != null || card.rental_investment_rating != null));
 
   return (
     <article
@@ -149,6 +115,7 @@ function PropertyCardBase({
       data-testid="property-card"
       data-id={card.id}
       data-rank={rank ?? undefined}
+      data-vertical={layout}
     >
       <div className="pcard-photo">
         <Link href={href} target="_blank" rel="noopener" onClick={onOpen} tabIndex={-1} aria-hidden>
@@ -159,9 +126,10 @@ function PropertyCardBase({
             <img src={photoUrl} alt="" loading="lazy" onError={() => setPhotoFailed(true)} />
           ) : null}
         </Link>
-        {/* Sellos: similar (related), dúplex (SOLO con true), lote. */}
-        {(similar || card.is_duplex === true || isLand) && (
+        <div className="pcard-top">
+          {/* Izquierda: tendencia del aviso y sellos (similar, dúplex SOLO con true). */}
           <div className="pcard-badges">
+            {trend && <TrendPill trend={trend} />}
             {similar && (
               <span className="pbadge pbadge--sim">
                 {/* P2 manda relevance_score > 1 en algunas related (visto 05/09: "104%"):
@@ -172,18 +140,21 @@ function PropertyCardBase({
               </span>
             )}
             {card.is_duplex === true && <span className="pbadge">Dúplex</span>}
-            {isLand && <span className="pbadge pbadge--land">Lote</span>}
           </div>
-        )}
-        {flags.length > 0 && (
+          {/* Derecha: clase del lote y antigüedad / vigencia. */}
           <div className="pcard-flags">
-            {flags.map((f) => (
-              <span className={`pflag pflag--${f.tone}`} key={f.label}>
-                {f.label}
+            {isLand && (
+              <span className="pbadge pbadge--land" data-testid="land-class">
+                {card.land_class ? LAND_CLASS_LABEL[card.land_class] : "Lote"}
+              </span>
+            )}
+            {flags.map((label) => (
+              <span className="pflag" key={label}>
+                {label}
               </span>
             ))}
           </div>
-        )}
+        </div>
         {/* Compartir (15/09): sobre la foto, abajo a la derecha (arriba van sellos y flags). */}
         <ShareButton card={card} rank={rank} from={from} />
       </div>
@@ -191,7 +162,7 @@ function PropertyCardBase({
       <div className="pcard-body">
         <div className="pcard-pricebox">
           <span className="pcard-price">{mainPrice(card)}</span>
-          <span className="pcard-price-refs">{priceRefs || " "}</span>
+          <span className="pcard-price-refs">{priceRefs || " "}</span>
         </div>
 
         <h3 className="pcard-title">
@@ -199,53 +170,26 @@ function PropertyCardBase({
             {title}
           </Link>
         </h3>
-        <p className="pcard-specs">{[distance, specs].filter(Boolean).join(" · ") || " "}</p>
+        <p className="pcard-specs">{[distance, specs].filter(Boolean).join(" · ") || " "}</p>
         <p className="pcard-address" title={address ?? undefined}>
-          {address || " "}
+          {address || " "}
         </p>
 
-        {card.primary_signal && clean(card.primary_signal.text) ? (
-          <SignalBadge signal={{ ...card.primary_signal, text: clean(card.primary_signal.text)! }} />
-        ) : (
-          <div className="slot-empty slot-empty--signal" aria-hidden />
+        {position && (
+          <PositionBlock
+            info={position}
+            similarsHref={`${href}#comparables`}
+            onSimilarsClick={() => trackCardClick(card, from, rank, "similars")}
+          />
         )}
+        {zone && <ZoneBlock info={zone} />}
+        {estimate && <EstimateBlock info={estimate} />}
 
-        {card.opportunity_score != null && card.score_components && card.score_components.length > 0 ? (
-          <ScoreDetails score={card.opportunity_score} components={card.score_components} />
-        ) : (
-          <div className="slot-empty slot-empty--score" aria-hidden />
+        {dates && (
+          <p className={`pcard-dates${dates.negotiate ? " pcard-dates--negotiate" : ""}`} title={dates.text}>
+            {dates.text}
+          </p>
         )}
-
-        <div className="ratings-row">
-          {showRatings ? (
-            <>
-              {card.deal_rating && (
-                <RatingChip
-                  label={RATING_LABEL_SHORT.deal_rating}
-                  title={RATING_LABEL.deal_rating}
-                  color={card.deal_rating}
-                  reasons={dealReasons(card)}
-                />
-              )}
-              {card.operation === "sale" && card.resale_investment_rating && (
-                <RatingChip
-                  label={RATING_LABEL_SHORT.resale_investment_rating}
-                  title={RATING_LABEL.resale_investment_rating}
-                  color={card.resale_investment_rating}
-                  reasons={card.resale_investment_reasons}
-                />
-              )}
-              {card.operation === "sale" && card.rental_investment_rating && (
-                <RatingChip
-                  label={RATING_LABEL_SHORT.rental_investment_rating}
-                  title={RATING_LABEL.rental_investment_rating}
-                  color={card.rental_investment_rating}
-                  reasons={card.rental_investment_reasons}
-                />
-              )}
-            </>
-          ) : null}
-        </div>
 
         <div className={`attr-chips${allChips ? " attr-chips--open" : ""}`}>
           {visibleChips.map((c) => (
@@ -260,33 +204,31 @@ function PropertyCardBase({
           )}
         </div>
 
-        <p className={`market-context${marketContext ? "" : " market-context--empty"}`}>
-          {marketContext || " "}
-        </p>
+        <div className="pcard-bottom">
+          <EstimateNotice />
 
-        <p className="pcard-dates">{dates.join(" · ") || " "}</p>
+          <div className="pcard-actions">
+            <ContactButton card={card} rank={rank} from={from} />
+            {listingUrl && (
+              <a
+                className="source-link"
+                href={listingUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() =>
+                  trackEvent(EVENTS.SOURCE_CLICK, { property_id: card.id, rank, position: rank, url: listingUrl, from })
+                }
+              >
+                Ver aviso original ↗
+              </a>
+            )}
+          </div>
 
-        <div className="pcard-actions">
-          <ContactButton card={card} rank={rank} from={from} />
-          {listingUrl && (
-            <a
-              className="source-link"
-              href={listingUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() =>
-                trackEvent(EVENTS.SOURCE_CLICK, { property_id: card.id, rank, position: rank, url: listingUrl, from })
-              }
-            >
-              Ver aviso original ↗
-            </a>
-          )}
-        </div>
-
-        <div className="pcard-foot">
-          <span className="pcard-foot-meta">
-            {[sourceName, card.publisher ? PUBLISHER_LABEL[card.publisher] : null].filter(Boolean).join(" · ") || " "}
-          </span>
+          <div className="pcard-foot">
+            <span className="pcard-foot-meta">
+              {[sourceName, card.publisher ? PUBLISHER_LABEL[card.publisher] : null].filter(Boolean).join(" · ") || " "}
+            </span>
+          </div>
         </div>
       </div>
     </article>

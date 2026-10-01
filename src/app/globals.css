@@ -666,9 +666,12 @@ img {
 }
 
 /* ============================== Card ============================== */
-/* Rediseño 05/09: todo lo variable acotado (título y dirección en 1 línea,
-   señal y contexto en 2, hasta 4 chips + "+N") para que las cards de una
-   fila queden parejas; foto sobre passe-partout lila. */
+/* Rediseño 05/09: título, ficha y dirección en 1 línea; foto sobre
+   passe-partout lila. Cards por vertical (29/09,
+   docs/GUIA_P1_2026-09-29_cards-por-vertical.md): los bloques de posición,
+   zona y estimación miden lo que su contenido y solo existen si el dato
+   llega; las cards de una fila se emparejan estirándose en la grilla, con
+   las acciones ancladas abajo. Solo verde, nunca rojo. */
 
 .pcard {
   background: var(--white);
@@ -718,13 +721,61 @@ img {
   transform: scale(1.03);
 }
 
-.pcard-badges {
+/* fila superior de la foto: tendencia y sellos a la izquierda, clase del
+   lote y antigüedad a la derecha; no tapa el link de la foto */
+.pcard-top {
   position: absolute;
   top: 10px;
   left: 10px;
+  right: 10px;
   display: flex;
-  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 5px 6px;
   z-index: 1;
+  pointer-events: none;
+}
+
+.pcard-badges {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* --- tendencia del aviso (29/09): "en baja" verde, "en alta" en tinta de marca --- */
+
+.trend-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--purple-deep);
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  border-radius: 999px;
+  padding: 5px 11px 5px 8px;
+  box-shadow: 0 1px 3px rgba(36, 16, 50, 0.18);
+}
+
+.trend-pill svg {
+  flex: none;
+}
+
+.trend-pill-text {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trend-pill--down {
+  color: var(--sig-green-ink);
 }
 
 .pbadge {
@@ -808,24 +859,25 @@ img {
 /* la foto también (15/09): tiene su propio link al detalle y el botón Compartir,
    que con `isolation` en .pcard-photo no puede subir solo por encima del ::after */
 .pcard .pcard-photo,
-.pcard .signal,
-.pcard .ratings-row,
+.pcard .posblock-sub a,
 .pcard .pcard-foot,
-.pcard details,
 .pcard .attr--more {
   position: relative;
   z-index: 1;
 }
 
+/* la ficha puede ocupar 2 líneas: en mobile "250 m² cub. · 502 m² lote" no entra en una */
 .pcard-specs {
   color: var(--ink);
   font-size: 13.5px;
   font-weight: 500;
+  line-height: 19px;
   margin: 0;
-  height: 19px;
-  white-space: nowrap;
+  min-height: 19px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .pcard-address {
@@ -836,15 +888,6 @@ img {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.slot-empty--signal {
-  height: 50px;
-  margin-top: 2px;
-}
-
-.slot-empty--score {
-  height: 38px;
 }
 
 .market-context {
@@ -859,14 +902,6 @@ img {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-}
-
-.pcard .market-context {
-  height: 37px;
-}
-
-.market-context--empty {
-  visibility: hidden;
 }
 
 /* --- señal principal --- */
@@ -890,25 +925,6 @@ img {
   border-radius: 999px;
   flex: none;
   margin-top: 5px;
-}
-
-/* en la card ocupa el ancho, mide 2 líneas fijas y el texto se acota a 2 */
-.pcard-body > .signal {
-  width: 100%;
-  height: 50px;
-  margin-top: 2px;
-  align-items: center;
-}
-
-.pcard-body > .signal .dot {
-  margin-top: 0;
-}
-
-.pcard-body > .signal .signal-text {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
 .sig--green {
@@ -956,172 +972,182 @@ img {
   background: var(--sig-outdated-dot);
 }
 
-/* --- ratings con reasons (details) --- */
+/* --- posición contra similares (29/09): la única comparación de la card --- */
 
-.ratings-row {
+.posblock {
   display: flex;
-  flex-wrap: nowrap;
-  gap: 6px;
-  height: 26px;
-  overflow: hidden;
-}
-
-/* al abrir las reasons de un rating, la fila crece (acción del usuario) */
-.ratings-row:has(details[open]) {
-  height: auto;
-  flex-wrap: wrap;
-  overflow: visible;
-}
-
-details.rating {
-  font-size: 12px;
-}
-
-details.rating summary {
-  list-style: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border-radius: 999px;
-  padding: 3px 10px;
-  font-weight: 500;
-  cursor: pointer;
-  user-select: none;
-  border: 1px solid transparent;
-}
-
-details.rating summary::-webkit-details-marker {
-  display: none;
-}
-
-details.rating summary .dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  margin-top: 0;
-}
-
-details.rating[open] summary {
-  border-color: currentColor;
-}
-
-details.rating .reasons {
-  margin: 6px 0 2px;
-  padding: 8px 12px;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 2px;
+  border-radius: 12px;
+  padding: 10px 12px 11px;
   background: var(--lilac);
-  border-radius: 10px;
-  color: var(--ink);
-  font-size: 12.5px;
-  max-width: 34em;
+  color: var(--purple-deep);
 }
 
-details.rating .reasons p {
-  margin: 0 0 4px;
+.posblock--green {
+  background: var(--sig-green-bg);
+  color: var(--sig-green-ink);
 }
 
-details.rating .reasons p:last-child {
-  margin-bottom: 0;
-}
-
-/* --- score con componentes --- */
-
-details.score {
-  font-size: 13px;
-}
-
-/* fila del score + primera razón (T3: nunca el número solo) = 2 líneas fijas */
-.pcard details.score {
-  height: 38px;
-}
-
-.pcard details.score[open] {
-  height: auto;
-}
-
-details.score summary {
-  list-style: none;
-  cursor: pointer;
-  display: block;
-  color: var(--purple);
-  font-weight: 600;
-  user-select: none;
-}
-
-details.score summary .score-row {
+.posblock-head {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 20px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
 }
 
-details.score summary .score-reason {
-  display: block;
-  font-weight: 400;
-  color: var(--muted);
-  font-size: 12.5px;
-  line-height: 18px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.score-comp--cap {
-  color: var(--sig-verify-ink);
-}
-
-details.score summary::-webkit-details-marker {
-  display: none;
-}
-
-details.score summary .score-label {
+.posblock-pct {
+  font-family: var(--display);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
   white-space: nowrap;
 }
 
-details.score summary .score-label b {
-  font-size: 15px;
+.posblock-text {
+  font-size: 13px;
   font-weight: 700;
 }
 
-details.score summary .why {
-  margin-left: auto;
-  font-weight: 400;
-  color: var(--muted);
-  font-size: 12.5px;
-  text-decoration: underline dotted;
+.posblock-sub {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.posblock-sub a {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
   white-space: nowrap;
 }
 
-.scorebar {
-  flex: 1;
-  max-width: 140px;
+/* barra de percentil: sin texto en el medio, la marca dice el resto */
+.posbar {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 4px;
+}
+
+.posbar-track {
+  position: relative;
   height: 6px;
-  background: var(--line);
   border-radius: 999px;
-  overflow: hidden;
+  background: rgba(255, 255, 255, 0.75);
 }
 
-.scorebar span {
-  display: block;
-  height: 100%;
-  background: linear-gradient(90deg, var(--purple), var(--magenta));
+.posbar-mark {
+  position: absolute;
+  top: -5px;
+  width: 16px;
+  height: 16px;
+  margin-left: -8px;
+  border-radius: 999px;
+  background: var(--purple);
+  border: 2px solid var(--white);
+  box-shadow: 0 1px 3px rgba(36, 16, 50, 0.3);
 }
 
-.score-components {
-  margin-top: 8px;
-  border-top: 1px dashed var(--line);
-  padding-top: 8px;
-  display: grid;
-  gap: 7px;
+.posblock--green .posbar-mark {
+  background: var(--sig-green-dot);
 }
 
-.score-comp {
-  font-size: 12.5px;
-  color: var(--muted);
-}
-
-.score-comp b {
-  color: var(--ink);
+.posbar-ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
   font-weight: 600;
+}
+
+/* --- zona y estimación (29/09): referencia, sin porcentaje contra el aviso --- */
+
+.zoneblock,
+.estblock {
+  border-radius: 12px;
+  padding: 9px 12px;
+  background: var(--lilac);
+  color: var(--purple-deep);
+}
+
+.zoneblock {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.zoneblock--green {
+  background: var(--sig-green-bg);
+  color: var(--sig-green-ink);
+}
+
+.zoneblock-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.block-kicker {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.zoneblock-value,
+.estblock-yield {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.zoneblock-value small {
+  display: inline-block;
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.zoneblock-yield,
+.estblock-rent {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.zoneblock-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 999px;
+  padding: 4px 10px 4px 7px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.estblock {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.estblock-note {
+  font-size: 11px;
+  line-height: 1.35;
+  opacity: 0.9;
+}
+
+/* aviso de estimación: en toda card y al pie de "Lectura de FINDER" */
+.estimate-notice {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--muted);
+  font-style: italic;
 }
 
 /* --- atributos y calidades --- */
@@ -1133,14 +1159,9 @@ details.score summary .why {
   align-content: flex-start;
 }
 
-/* 2 filas fijas de chips (24 + 6 + 24); "+N" las abre */
+/* hasta 3 chips + "+N": una fila reservada, crece si los chips son largos */
 .pcard .attr-chips {
-  height: 54px;
-  overflow: hidden;
-}
-
-.pcard .attr-chips--open {
-  height: auto;
+  min-height: 24px;
 }
 
 .attr {
@@ -1177,23 +1198,34 @@ details.score summary .why {
   border-color: var(--purple);
 }
 
-/* --- fechas (T3): publicado hace X · actualizado hace Y --- */
+/* --- fechas (29/09): actualizado siempre; publicado solo como margen para negociar --- */
 
 .pcard-dates {
   margin: 0;
-  height: 18px;
+  min-height: 18px;
   font-size: 12.5px;
+  line-height: 18px;
   color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.pcard-dates--negotiate {
+  color: var(--sig-yellow-ink);
 }
 
 /* --- acciones (T4): Consultar primero, el aviso original después --- */
 
-.pcard-actions {
+/* pie de la card (aviso de estimación, acciones, procedencia): anclado abajo
+   para que las cards de una fila terminen parejas */
+.pcard-bottom {
   margin-top: auto;
-  padding-top: 8px;
+  padding-top: 3px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.pcard-actions {
+  padding-top: 2px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1286,21 +1318,22 @@ details.score summary .why {
   text-overflow: ellipsis;
 }
 
-/* --- etiquetas de antigüedad / vigencia / calidad (sobre la foto, derecha) --- */
+/* --- clase del lote y etiquetas de antigüedad / vigencia (sobre la foto, derecha) --- */
 
 .pcard-flags {
-  position: absolute;
-  top: 10px;
-  right: 10px;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 5px;
-  z-index: 1;
+  flex: none;
+  margin-left: auto;
 }
 
+/* en la card van neutras (29/09: ningún color de alarma); el detalle usa --warn */
 .pflag {
   display: inline-block;
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--muted);
   font-size: 11.5px;
   font-weight: 600;
   border-radius: 999px;
@@ -1360,8 +1393,8 @@ details.score summary .why {
 }
 
 .sk--signal {
-  height: 46px;
-  border-radius: 10px;
+  height: 104px;
+  border-radius: 12px;
   margin-top: 4px;
 }
 
@@ -2123,6 +2156,20 @@ details.score summary .why {
   margin-top: 2px;
 }
 
+/* Avisos similares (01/10): resumen del conjunto de P3 y "Mostrar los N restantes"
+   (P2 ya no recorta el alquiler a 30; el recorte es de P1). */
+.section-lead {
+  color: var(--muted);
+  font-size: 14px;
+  margin: -6px 0 14px;
+}
+
+.comparables-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 14px;
+}
+
 .datalist {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -2308,6 +2355,12 @@ details.score summary .why {
 
 /* Card ↔ marker: resaltado cruzado */
 .map-card-wrap {
+  min-width: 0;
+  display: flex;
+}
+
+.map-card-wrap > .pcard {
+  flex: 1 1 auto;
   min-width: 0;
 }
 

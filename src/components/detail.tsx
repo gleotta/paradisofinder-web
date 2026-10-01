@@ -236,6 +236,77 @@ export function SourceLinks({
   );
 }
 
+/** Un aviso similar ya formateado en el server (precio, conversión y ficha). */
+export interface ComparableItem {
+  id: string | null;
+  price: string;
+  secondary: string | null;
+  meta: string;
+}
+
+/**
+ * Lista de avisos similares del detalle (respuesta de P2 30/09-01/10): P2
+ * manda el conjunto entero que se puede mostrar — hasta 30 en venta y lotes,
+ * SIN tope en alquiler (hoy hasta 103) —, así que se ven los primeros
+ * `visible` y el resto se despliega a pedido. El recorte es de P1.
+ */
+export function ComparablesGrid({
+  items,
+  visible,
+  searchId,
+  propertyId,
+}: {
+  items: ComparableItem[];
+  visible: number;
+  searchId: string | null;
+  propertyId: string;
+}) {
+  const [all, setAll] = useState(false);
+  const shown = all ? items : items.slice(0, visible);
+  const rest = items.length - shown.length;
+  return (
+    <>
+      <div className="minicards">
+        {shown.map((it, i) => {
+          const body = (
+            <>
+              <div className="mprice">
+                {it.price}
+                {it.secondary && <small style={{ color: "var(--muted)", fontWeight: 400 }}> {it.secondary}</small>}
+              </div>
+              {it.meta && <div className="mmeta">{it.meta}</div>}
+            </>
+          );
+          return it.id ? (
+            <MiniCardLink id={it.id} searchId={searchId} key={it.id}>
+              {body}
+            </MiniCardLink>
+          ) : (
+            <div className="minicard" key={i}>
+              {body}
+            </div>
+          );
+        })}
+      </div>
+      {rest > 0 && (
+        <div className="comparables-more">
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            data-testid="comparables-more"
+            onClick={() => {
+              setAll(true);
+              trackEvent(EVENTS.COMPARABLES_EXPANDED, { property_id: propertyId, shown: shown.length, total: items.length });
+            }}
+          >
+            Mostrar los {rest} restantes
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
+
 /** Comparable clickeable: también abre en pestaña nueva y hereda la búsqueda. */
 export function MiniCardLink({
   id,

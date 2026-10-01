@@ -70,6 +70,8 @@ export const EVENTS = {
   SHARE_CLICK: "share_click",
   /** 15/09: link "Abrir en Google Maps" del mapa del detalle. */
   DETAIL_MAP_EXTERNAL: "detail_map_external_click",
+  /** 01/10: "Mostrar los N restantes" en los avisos similares del detalle (alquiler puede pasar de 30). */
+  COMPARABLES_EXPANDED: "comparables_expanded",
   /** Botón "Publicá tu propiedad" (WhatsApp para inmobiliarias/dueños). */
   PUBLISH_CONTACT: "publish_contact_click",
   MAP_TOGGLED: "map_toggled",
@@ -198,12 +200,19 @@ export function scoreStats(cards: Pick<Card, "opportunity_score">[]) {
   };
 }
 
-export function trackCardClick(card: Pick<Card, "id" | "opportunity_score">, from: CardOrigin, rank: number | null) {
+export function trackCardClick(
+  card: Pick<Card, "id" | "opportunity_score">,
+  from: CardOrigin,
+  rank: number | null,
+  /** "similars" = entró por "ver similares" (29/09): abre el detalle en sus comparables. */
+  target?: "similars",
+) {
   trackEvent(EVENTS.CARD_CLICK, {
     property_id: card.id,
     rank,
     position: rank,
     score: card.opportunity_score,
     from,
+    ...(target ? { target } : {}),
   });
 }

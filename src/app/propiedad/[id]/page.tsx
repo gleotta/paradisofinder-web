@@ -16,8 +16,11 @@ import {
   ROOM_CLASS_LABEL,
 } from "@/lib/labels";
 import {
+  cardVertical,
   clean,
+  comparablesPoolInfo,
   dealReasons,
+  estimateInfo,
   fmtAgo,
   fmtDate,
   fmtInt,
@@ -25,14 +28,18 @@ import {
   fmtPct,
   landServicesLabel,
   mainPrice,
+  miniCardMeta,
   miniCardPrice,
+  percentilePhrase,
+  positionPhrase,
   pricePerSqm,
   secondaryPrice,
   zoneName,
+  zoneRefInfo,
 } from "@/lib/format";
-import { SignalBadge, ratingDotStyle } from "@/components/signals";
+import { EstimateBlock, EstimateNotice, SignalBadge, ZoneBlock, ratingDotStyle } from "@/components/signals";
 import DetailMap from "@/components/DetailMap";
-import { BackLink, ContactActions, DetailTracker, Gallery, MiniCardLink, SourceLinks } from "@/components/detail";
+import { BackLink, ComparablesGrid, ContactActions, DetailTracker, Gallery, SourceLinks, type ComparableItem } from "@/components/detail";
 import { isCardOrigin, isSearchId } from "@/lib/tracking-ids";
 import { isVerticalId } from "@/lib/vertical";
 import { siteUrl } from "@/lib/server/contact";
@@ -44,7 +51,23 @@ import { propertyOgImageUrl, propertyShareUrl } from "@/lib/share";
  * indicadores de mercado → comparables → datos duros → descripción → contacto
  * → source. Todo display directo de P2/P3; null = no informado → se omite, y
  * ningún "None"/"unknown" llega a pantalla (`clean()`, T3 14/09).
+ *
+ * Cards por vertical (29/09 — `docs/GUIA_P1_2026-09-29_cards-por-vertical.md`
+ * §2.4): acá vive lo que la card dejó de mostrar (score explicado, los tres
+ * semáforos con sus motivos, contexto de mercado); la sección de comparables
+ * es el destino de "ver similares" (`#comparables`); la referencia de zona y,
+ * en Invertir, la estimación de la propiedad van con los mismos bloques de la
+ * card; se fueron los "indicadores secundarios" y el sello "Datos completos".
+ *
+ * Respuesta de P2 del 30/09-01/10 (`docs/RESPUESTA_P2_A_P1_2026-09-30.md`):
+ * "Avisos similares" lista el conjunto entero con el que P3 midió el precio
+ * (hasta 30 en venta y lotes, sin tope en alquiler → P1 muestra 30 y ofrece el
+ * resto), con `comparables_pool` en la cabecera; y el vocabulario propio del
+ * detalle quedó sin jerga (nada de "percentil", "comparables" ni "score").
  */
+
+/** Avisos similares a la vista antes de "Mostrar los N restantes". */
+const COMPARABLES_VISIBLE = 30;
 
 const load = cache((id: string) => getProperty(id));
 
@@ -111,6 +134,15 @@ export default async function PropertyPage({
 
   const p = data.property;
   const isLand = p.property_type === "land";
+  const layout = cardVertical(p, vertical);
+  const zoneRef = zoneRefInfo(p, layout);
+  const estimate = layout === "invertir" ? estimateInfo(p) : null;
+  const comparables = data.comparables ?? [];
+  const pool = comparablesPoolInfo(data.comparables_pool, p);
+  const comparableItems: ComparableItem[] = comparables.map((mc) => {
+    const price = miniCardPrice(mc);
+    return { id: clean(mc.id), price: price.main, secondary: price.secondary, meta: miniCardMeta(mc, p.zone) };
+  });
   const scoreComponents = data.score_components ?? p.score_components ?? [];
   const title = `${PROPERTY_TYPE_LABEL[p.property_type] ?? "Propiedad"} en ${zoneName(p.zone)}`;
   const photos = (p.photos?.length ? p.photos : p.photo_url ? [p.photo_url] : []).map(clean).filter((x): x is string => !!x);
@@ -163,7 +195,8 @@ export default async function PropertyPage({
           {(clean(p.primary_signal?.text) ||
             ratings.length > 0 ||
             (p.opportunity_score != null && scoreComponents.length > 0) ||
-            (p.secondary_indicators?.length ?? 0) > 0 ||
+            zoneRef ||
+            estimate ||
             marketContext) && (
             <section className="dsection">
               <h2>Lectura de FINDER</h2>
@@ -177,7 +210,7 @@ export default async function PropertyPage({
                     <div className="score-head">
                       <span className="score-num">
                         {p.opportunity_score}
-                        <small> / 100 · Opportunity Score</small>
+                        <small> / 100 · puntaje de oportunidad</small>
                       </span>
                     </div>
                     <table className="comp-table">
@@ -215,24 +248,13 @@ export default async function PropertyPage({
                   </div>
                 ))}
 
-                {/* Indicadores secundarios de P3: nombre + valor + explicación, tal cual */}
-                {(p.secondary_indicators?.length ?? 0) > 0 && (
-                  <table className="comp-table">
-                    <tbody>
-                      {p.secondary_indicators!
-                        .filter((ind) => clean(ind.name) && clean(ind.value))
-                        .map((ind) => (
-                          <tr key={ind.name}>
-                            <td className="lbl">{ind.name}</td>
-                            <td className="raw">{ind.value}</td>
-                            <td className="desc">{clean(ind.tooltip) ?? ""}</td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                )}
+                {/* Referencia de zona y, en Invertir, la estimación: los mismos bloques de la card */}
+                {zoneRef && <ZoneBlock info={zoneRef} />}
+                {estimate && <EstimateBlock info={estimate} />}
 
                 {marketContext && <p className="market-context">{marketContext}</p>}
+
+                <EstimateNotice />
               </div>
             </section>
           )}
@@ -252,43 +274,23 @@ export default async function PropertyPage({
             </section>
           )}
 
-          {/* 4 — Comparables */}
-          {data.comparables && data.comparables.length > 0 && (
-            <section className="dsection">
-              <h2>Comparables en la zona</h2>
-              <div className="minicards">
-                {data.comparables.map((mc, i) => {
-                  const price = miniCardPrice(mc);
-                  const body = (
-                    <>
-                      <div className="mprice">
-                        {price.main}
-                        {price.secondary && <small style={{ color: "var(--muted)", fontWeight: 400 }}> {price.secondary}</small>}
-                      </div>
-                      <div className="mmeta">
-                        {[
-                          mc.property_type ? PROPERTY_TYPE_LABEL[mc.property_type] : null,
-                          clean(mc.zone) ? zoneName(mc.zone) : null,
-                          mc.area_sqm != null ? `${fmtInt(mc.area_sqm)} m²` : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </div>
-                    </>
-                  );
-                  return mc.id ? (
-                    <MiniCardLink id={mc.id} searchId={searchId} key={mc.id}>
-                      {body}
-                    </MiniCardLink>
-                  ) : (
-                    <div className="minicard" key={i}>
-                      {body}
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          )}
+          {/* 4 — Avisos similares: el conjunto con el que P3 midió el precio (P2
+              30/09-01/10), destino de "ver similares" de la card (#comparables). La
+              sección existe siempre, para que el ancla no caiga en el vacío. */}
+          <section className="dsection" id="comparables" data-testid="comparables">
+            <h2>Avisos similares</h2>
+            {pool && (
+              <p className="section-lead" data-testid="comparables-pool">
+                {pool.summary}
+                {pool.hidden && <> · {pool.hidden}</>}
+              </p>
+            )}
+            {comparableItems.length === 0 ? (
+              <p className="section-note">Por ahora no hay avisos similares para mostrar de esta propiedad.</p>
+            ) : (
+              <ComparablesGrid items={comparableItems} visible={COMPARABLES_VISIBLE} searchId={searchId} propertyId={p.id} />
+            )}
+          </section>
 
           {/* 5 — Datos duros */}
           {hardData.length > 0 && (
@@ -360,7 +362,6 @@ function flagList(p: PropertyDetail): { label: string; tone: "warn" | "ok" }[] {
   const out: { label: string; tone: "warn" | "ok" }[] = [];
   if (p.listing_status === "stale") out.push({ label: LISTING_STATUS_LABEL.stale!, tone: "warn" });
   else if (p.age_flag && AGE_FLAG_LABEL[p.age_flag]) out.push({ label: AGE_FLAG_LABEL[p.age_flag], tone: "warn" });
-  if ((p.quality_tier ?? 0) >= 3) out.push({ label: "Datos completos", tone: "ok" });
   return out;
 }
 
@@ -384,21 +385,30 @@ function indicatorList(p: PropertyDetail): { label: string; value: string }[] {
   const isSale = p.operation === "sale";
   const isLand = p.property_type === "land";
   const out: { label: string; value: string }[] = [];
-  if (p.valuation_gap_pct != null)
-    out.push({
-      label: isLand ? "Precio del m² vs. la zona" : "Precio vs. comparables",
-      value: `${fmtPct(p.valuation_gap_pct, true)}${p.valuation_gap_capped ? " (acotado)" : ""}`,
-    });
-  if (p.price_percentile != null) out.push({ label: "Percentil de precio en su zona", value: `P${fmtInt(p.price_percentile)}` });
-  if (isSale && !isLand && p.gross_yield_pct != null) out.push({ label: "Renta bruta anual estimada", value: fmtPct(p.gross_yield_pct) });
+  // La misma frase de la card: el número con signo solo no dice para qué lado.
+  const position = positionPhrase(p);
+  if (position) out.push({ label: isLand ? "Precio del m² frente a la zona" : "Precio frente a similares", value: position });
+  // Lenguaje de usuario (P2/P3 lo cambiaron el 30/09; acá era deuda de P1): sin "percentil" ni "renta bruta".
+  const percentile = percentilePhrase(p.price_percentile);
+  if (percentile) out.push({ label: "Posición entre similares", value: percentile });
+  if (isSale && !isLand && p.gross_yield_pct != null) out.push({ label: "Rentabilidad anual estimada", value: fmtPct(p.gross_yield_pct) });
   if (isSale && !isLand && p.estimated_monthly_rent != null)
     out.push({ label: "Alquiler mensual estimado", value: `US$ ${fmtInt(p.estimated_monthly_rent)}` });
+  // Alquiler: la referencia absoluta va acá, no en la card. En dólares, con
+  // los pesos que convierte P2 cuando los manda.
+  if (!isSale && p.estimated_monthly_rent != null)
+    out.push({
+      label: "Similares en la zona",
+      value: `US$ ${fmtInt(p.estimated_monthly_rent)}${
+        p.estimated_monthly_rent_ars != null ? ` (≈ $ ${fmtInt(p.estimated_monthly_rent_ars)})` : ""
+      }`,
+    });
   if (isSale && !isLand && p.rent_to_price_ratio != null)
     out.push({
       label: "Relación alquiler/precio",
       value: new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(p.rent_to_price_ratio),
     });
-  if (p.comparables_count != null) out.push({ label: "Comparables considerados", value: fmtInt(p.comparables_count) });
+  if (p.comparables_count != null) out.push({ label: "Avisos similares comparados", value: fmtInt(p.comparables_count) });
   if (p.zone_supply != null) out.push({ label: "Avisos activos en la zona", value: fmtInt(p.zone_supply) });
   return out;
 }

@@ -75,13 +75,6 @@ export const RATING_LABEL = {
   rental_investment_rating: "Inversión: renta",
 } as const;
 
-/** Versión corta para la card (los tres chips entran en una sola fila); el `title` lleva la larga. */
-export const RATING_LABEL_SHORT: Record<keyof typeof RATING_LABEL, string> = {
-  deal_rating: "Precio",
-  resale_investment_rating: "Reventa",
-  rental_investment_rating: "Renta",
-};
-
 /**
  * Etiqueta visible de los valores NO cromáticos de `deal_rating` (contrato
  * 13/09 §4.1, sugeridas por P2): el chip dice esto en vez de "Precio".
@@ -135,6 +128,86 @@ export const ATTRIBUTE_LABEL = {
 } as const;
 
 export type AttributeKey = keyof typeof ATTRIBUTE_LABEL;
+
+/* ---------------- Cards por vertical (guía 29/09) ---------------- */
+
+/** Layout de la card: las cuatro verticales del selector. */
+export type CardVertical = "alquilar" | "comprar" | "invertir" | "lotes";
+
+/**
+ * Estado del inmueble como chip: SOLO los extremos declarados (C11).
+ * "Excelente"/"bueno" no se muestran en la card (sí en el detalle).
+ */
+export const CONDITION_CHIP_LABEL: Partial<Record<Condition, string>> = {
+  new: CONDITION_LABEL.new,
+  under_construction: CONDITION_LABEL.under_construction,
+  needs_renovation: CONDITION_LABEL.needs_renovation,
+};
+
+/** Un chip duro de vivienda: atributo en `true` o estado declarado. */
+export type ChipKey = AttributeKey | `condition:${"new" | "under_construction" | "needs_renovation"}`;
+
+/** Orden FIJO de los chips duros de vivienda por vertical (guía §2.3); lotes tiene los suyos. */
+export const CHIP_ORDER: Record<Exclude<CardVertical, "lotes">, ChipKey[]> = {
+  comprar: [
+    "mortgage_eligible",
+    "condition:new",
+    "condition:under_construction",
+    "condition:needs_renovation",
+    "parking",
+    "patio",
+    "bbq_area",
+    "pool",
+    "gated_community",
+    "elevator",
+  ],
+  invertir: [
+    "mortgage_eligible",
+    "condition:new",
+    "condition:under_construction",
+    "condition:needs_renovation",
+    "parking",
+    "patio",
+    "bbq_area",
+    "pool",
+    "gated_community",
+    "elevator",
+  ],
+  alquilar: ["furnished", "condition:new", "parking", "patio", "gated_community", "elevator", "pool", "bbq_area"],
+};
+
+/**
+ * Unidad del subtítulo del bloque de posición ("30 casas en Capital, 3 dorm."):
+ * contra QUÉ se comparó el aviso. Lotes: P3 nunca compara urbano contra rural
+ * y parte el rural por servicios declarados.
+ */
+export const POSITION_UNIT = {
+  rent: "alquileres",
+  house: "casas",
+  apartment: "departamentos",
+  land: "lotes",
+  land_urban: "lotes urbanos",
+  land_rural: "lotes rurales",
+  land_rural_services: "lotes rurales con servicios",
+  other: "avisos similares",
+} as const;
+
+/** Aviso de estimación (C10): va en TODA card y al pie de "Lectura de FINDER". Texto exacto. */
+export const ESTIMATE_NOTICE =
+  "Valores estimados a partir de avisos publicados, no de operaciones concretadas. Son orientativos.";
+
+/** Aclaración fija del bloque "Esta propiedad · estimación" (Invertir). */
+export const ESTIMATE_BLOCK_NOTE =
+  "Según alquileres similares publicados en la zona. Rentabilidad = un año de ese alquiler ÷ precio de este aviso.";
+
+/**
+ * "Publicado hace X · margen para negociar" (C13): solo cuando
+ * `days_on_market` SUPERA el corte — los mismos de vigencia de P3.
+ */
+export const NEGOTIATION_DAYS: Record<Operation, number> = {
+  rent: 60,
+  sale: 90,
+};
 
 /* ---------------- Lotes (contrato 13/09 §4.4) ---------------- */
 
