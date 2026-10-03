@@ -181,6 +181,30 @@ export const CHIP_ORDER: Record<Exclude<CardVertical, "lotes">, ChipKey[]> = {
  * contra QUÉ se comparó el aviso. Lotes: P3 nunca compara urbano contra rural
  * y parte el rural por servicios declarados.
  */
+/**
+ * "Avisos similares" del detalle (decisión de German, 03/10): a la vista van
+ * las 5 de superficie más parecida, con la propiedad intercalada en su lugar
+ * por precio; el resto, detrás de "Ver los N similares".
+ */
+export const SIMILARS_VISIBLE = 5;
+
+/** Etiqueta de la fila propia entre los similares ("Esta casa"). */
+export const SELF_LABEL: Partial<Record<PropertyType, string>> = {
+  house: "Esta casa",
+  apartment: "Este departamento",
+  land: "Este lote",
+  villa: "Esta villa",
+  room: "Esta habitación",
+  studio: "Este monoambiente",
+  office: "Esta oficina",
+  retail: "Este local",
+  garage: "Esta cochera",
+  warehouse: "Este galpón",
+  penthouse: "Este penthouse",
+  attic: "Este ático",
+};
+export const SELF_LABEL_DEFAULT = "Esta propiedad";
+
 export const POSITION_UNIT = {
   rent: "alquileres",
   house: "casas",

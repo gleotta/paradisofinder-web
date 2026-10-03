@@ -13,6 +13,7 @@ import {
   fmtKm,
   mainPrice,
   positionInfo,
+  positionMissingReason,
   pricePerSqm,
   priceTrendInfo,
   roomSpecsLine,
@@ -95,6 +96,8 @@ function PropertyCardBase({
 
   const trend = priceTrendInfo(card);
   const position = positionInfo(card);
+  // Sin gap, la card dice por qué con el motivo de P2/P3 (nunca un hueco mudo).
+  const positionMissing = position ? null : positionMissingReason(card);
   const zone = zoneRefInfo(card, layout);
   const estimate = layout === "invertir" ? estimateInfo(card) : null;
   const dates = cardDates(card);
@@ -181,6 +184,11 @@ function PropertyCardBase({
             similarsHref={`${href}#comparables`}
             onSimilarsClick={() => trackCardClick(card, from, rank, "similars")}
           />
+        )}
+        {positionMissing && (
+          <p className="pcard-noposition" data-testid="position-missing">
+            {positionMissing}
+          </p>
         )}
         {zone && <ZoneBlock info={zone} />}
         {estimate && <EstimateBlock info={estimate} />}

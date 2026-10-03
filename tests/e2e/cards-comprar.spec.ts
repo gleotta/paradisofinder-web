@@ -36,7 +36,9 @@ test.describe("cards · comprar · propias", () => {
     await expect(first.locator(".pcard-price-refs")).toHaveText("US$ 600/m²");
     await expect(first.locator(".pcard-specs")).toHaveText("5 amb. · 3 dorm. · 3 baños · 250 m² cub. · 502 m² lote");
     await expect(first.getByTestId("position").locator(".posblock-pct")).toHaveText(/^15\s%$/);
-    await expect(first.getByTestId("position").locator(".posblock-sub")).toContainText("30 casas en Capital, 3 dorm.");
+    // Casas en venta: el conjunto de P3 no se arma por dormitorios → sin ", 3 dorm." (03/10).
+    await expect(first.getByTestId("position").locator(".posblock-sub")).toContainText("30 casas en Capital ·");
+    await expect(first.getByTestId("position").locator(".posblock-sub")).not.toContainText("dorm.");
     await expect(first.getByTestId("price-trend")).toHaveText(/^En baja 12\s% · antes US\$ 170\.000$/);
     await expect(first.getByTestId("zone-ref").locator(".zoneblock-value")).toHaveText("m² US$ 857");
     await expect(page.locator('[data-id="sj-mks1"]').getByTestId("position").locator(".posblock-sub")).toContainText(

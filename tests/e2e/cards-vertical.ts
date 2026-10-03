@@ -36,8 +36,8 @@ export interface VerticalCase {
   comparables: { count: number; listed: number };
 }
 
-/** Avisos similares a la vista en el detalle antes de "Mostrar los N restantes" (P1 recorta; P2 ya no). */
-const COMPARABLES_VISIBLE = 30;
+/** Similares a la vista en el detalle (03/10): las 5 de superficie más parecida; el resto detrás de "Ver los N similares". */
+const SIMILARS_VISIBLE = 5;
 
 export const NOTICE = "Valores estimados a partir de avisos publicados, no de operaciones concretadas. Son orientativos.";
 
@@ -88,7 +88,12 @@ export function verticalBattery(c: VerticalCase): void {
       for (let i = 0; i < n; i++) {
         const card = cards(page).nth(i);
         const block = card.getByTestId("position");
-        if ((await block.count()) === 0) continue;
+        if ((await block.count()) === 0) {
+          // Sin gap, la card dice por qué (motivo de P2/P3) o no dice nada; nunca un número.
+          const missing = card.getByTestId("position-missing");
+          if (await missing.count()) expect((await missing.innerText()).trim().length).toBeGreaterThanOrEqual(10);
+          continue;
+        }
         seen++;
         const pct = (await block.locator(".posblock-pct").innerText()).trim();
         expect(pct).toMatch(/^\d{1,2}\s%\+?$/);
@@ -124,9 +129,10 @@ export function verticalBattery(c: VerticalCase): void {
       await expect(capped).toHaveAttribute("data-tone", "neutral");
       await expect(capped.locator(".posblock-pct")).toHaveText(/^35\s%\+$/);
       await expect(capped).toContainText("verificar el aviso");
-      // Sin gap no hay bloque (la card 10 de los mocks no tiene comparables suficientes).
+      // Sin gap no hay bloque (la card 10 de los mocks no tiene comparables suficientes): queda el motivo de P2.
       await expect(fixed(page, c, 9)).toBeVisible();
       await expect(fixed(page, c, 9).getByTestId("position")).toHaveCount(0);
+      await expect(fixed(page, c, 9).getByTestId("position-missing")).toHaveText(/menos de 5 avisos similares/);
     });
 
     test("tendencia: 'En baja' con el precio anterior en la moneda del aviso, 'En alta' sin 'antes'", async ({ page }) => {
@@ -260,18 +266,29 @@ export function verticalBattery(c: VerticalCase): void {
       await expect(detail.getByTestId("estimate-notice")).toHaveText(NOTICE);
       // La tabla de "indicadores secundarios" se fue: queda, como mucho, la del score.
       expect(await detail.locator(".comp-table").count()).toBeLessThanOrEqual(1);
-      // Avisos similares (P2 30/09-01/10): el conjunto entero con su cabecera; a la vista
-      // como mucho 30, el resto detrás de "Mostrar los N restantes".
+      // Avisos similares (03/10): el conjunto entero de P2 con su cabecera; a la vista las 5
+      // de superficie más parecida, por precio, con la propiedad intercalada ("Esta casa") y
+      // la tira de precios; el resto detrás de "Ver los N similares".
       await expect(section.locator("h2")).toHaveText("Avisos similares");
-      const minis = section.locator(".minicard");
-      const shown = await minis.count();
-      expect(shown).toBeLessThanOrEqual(COMPARABLES_VISIBLE);
+      const rows = section.getByTestId("similar-row");
+      const shown = await rows.count();
+      expect(shown).toBeLessThanOrEqual(SIMILARS_VISIBLE);
       const pool = section.getByTestId("comparables-pool");
       if (await pool.count()) {
         expect(await pool.innerText()).toMatch(/^Comparado con \d+ .*similares.* en \S/);
       }
-      for (let i = 0; i < Math.min(shown, 5); i++) {
-        expect(await minis.nth(i).innerText()).not.toMatch(/\b0 m²|\b(None|null|NaN)\b/);
+      if (shown > 0) {
+        await expect(section.getByTestId("similar-self")).toHaveCount(1);
+        await expect(section.getByTestId("similar-self")).toContainText(/^(Est[ae] \S+|US\$|\$)/);
+        await expect(section.getByTestId("price-strip")).toBeVisible();
+        // Por precio, con la propiedad en su lugar: las filas no bajan de precio.
+        const prices = await section.locator(".simrow .simrow-price strong").allInnerTexts();
+        const usd = prices.map((t) => (t.startsWith("US$") ? Number(t.replace(/\D/g, "")) : null));
+        for (let i = 1; i < usd.length; i++) if (usd[i] != null && usd[i - 1] != null) expect(usd[i]!).toBeGreaterThanOrEqual(usd[i - 1]!);
+      }
+      for (let i = 0; i < shown; i++) {
+        expect(await rows.nth(i).innerText()).not.toMatch(/\b0 m²|\b(None|null|NaN)\b/);
+        await expect(rows.nth(i).locator("img.simrow-thumb")).toHaveAttribute("src", /\/og\/propiedad\/.+\.t\.jpg$/);
       }
       if (!live) {
         await expect(detail.locator(".score-num")).toBeVisible();
@@ -279,13 +296,14 @@ export function verticalBattery(c: VerticalCase): void {
         await expect(detail.locator(".rating-block").first()).toBeVisible();
         const { count, listed } = c.comparables;
         await expect(pool).toContainText(`Comparado con ${count} `);
-        await expect(minis).toHaveCount(Math.min(listed, COMPARABLES_VISIBLE));
+        await expect(rows).toHaveCount(Math.min(listed, SIMILARS_VISIBLE));
         const more = section.getByTestId("comparables-more");
-        if (listed > COMPARABLES_VISIBLE) {
-          await expect(more).toHaveText(`Mostrar los ${listed - COMPARABLES_VISIBLE} restantes`);
+        if (listed > SIMILARS_VISIBLE) {
+          await expect(more).toHaveText(`Ver los ${listed} similares`);
           await more.click();
-          await expect(minis).toHaveCount(listed);
-          await expect(more).toHaveCount(0);
+          await expect(rows).toHaveCount(listed);
+          await expect(section.getByTestId("similar-self")).toHaveCount(1);
+          await expect(more).toHaveText(`Ver solo los ${SIMILARS_VISIBLE} más parecidos`);
         } else {
           await expect(more).toHaveCount(0);
         }

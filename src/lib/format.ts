@@ -332,7 +332,7 @@ export function positionInfo(
   else head = `${side} de similares`;
 
   const unit = positionUnit(card);
-  const where = `en ${zoneName(card.zone)}${card.bedrooms ? `, ${card.bedrooms} dorm.` : ""}`;
+  const where = poolWhere(card);
   const sub =
     card.comparables_count != null
       ? `${nf.format(card.comparables_count)} ${unit} ${where}`
@@ -347,6 +347,41 @@ export function positionInfo(
     green: card.deal_rating === "green",
     percentile: p != null && Number.isFinite(p) ? Math.max(0, Math.min(100, p)) : null,
   };
+}
+
+/**
+ * ¿El conjunto de similares de P3 se arma por dormitorios? Sí en alquiler de
+ * vivienda (dormitorios exactos) y en departamentos en venta (mismo tramo);
+ * NO en casas en venta ni en lotes, donde manda la banda de superficie
+ * (`_select_comparables` de P3; verificado el 03/10: entre las 30 casas
+ * similares de una casa de 3 dormitorios hay casas de 1 y 2). Decir
+ * ", 3 dorm." ahí sería falso.
+ */
+function poolByBedrooms(card: Pick<Card, "operation" | "property_type">): boolean {
+  if (card.property_type === "land" || card.property_type === "room") return false;
+  return card.operation === "rent" || card.property_type === "apartment";
+}
+
+/** "en Rawson" · "en Capital, 2 dorm." (los dormitorios solo cuando el conjunto los exige). */
+function poolWhere(card: Pick<Card, "zone" | "bedrooms" | "operation" | "property_type">): string {
+  const dorm = poolByBedrooms(card) && card.bedrooms ? `, ${card.bedrooms} dorm.` : "";
+  return `en ${zoneName(card.zone)}${dorm}`;
+}
+
+/** Motivos de P2/P3 que explican por qué un aviso no tiene comparación de precio. */
+const NO_POSITION_CODES = new Set(["sin_superficie_cubierta", "pocos_comparables", "sin_comparables", "atipico", "sin_datos"]);
+
+/**
+ * Por qué la card no tiene bloque de posición (03/10, German: "hay cards que
+ * no muestran el porcentaje contra similares"): el motivo que mandan P2/P3
+ * en `deal_rating_reasons` ("Sin superficie cubierta: no se puede comparar
+ * el precio por m²", "Hay menos de 5 avisos similares en la zona…"), tal
+ * cual. Solo cuando no hay gap; sin motivo conocido, nada.
+ */
+export function positionMissingReason(card: Pick<Card, "valuation_gap_pct" | "deal_rating_reasons" | "deal_reasons">): string | null {
+  if (card.valuation_gap_pct != null) return null;
+  const reason = (dealReasons(card) ?? []).find((r) => NO_POSITION_CODES.has(r.code) && clean(r.text));
+  return reason ? clean(reason.text) : null;
 }
 
 /**
@@ -365,7 +400,7 @@ export function positionPhrase(card: Parameters<typeof positionInfo>[0]): string
  * puede ampliarse a zonas vecinas (`comparables_pool.scope`). null = no
  * informado → se omite (nunca "0 m²").
  */
-export function miniCardMeta(mc: MiniCard, propertyZone: string | null): string {
+export function miniCardMeta(mc: MiniCard, propertyZone: string | null, { withSqm = true }: { withSqm?: boolean } = {}): string {
   const parts: string[] = [];
   const type = mc.property_type ? PROPERTY_TYPE_LABEL[mc.property_type] : null;
   if (type) parts.push(type);
@@ -377,13 +412,23 @@ export function miniCardMeta(mc: MiniCard, propertyZone: string | null): string 
     }
   } else {
     if (mc.bedrooms != null) parts.push(`${mc.bedrooms} dorm.`);
-    if (hasArea(mc.covered_area_sqm)) parts.push(`${nf.format(mc.covered_area_sqm)} m² cub.`);
-    else if (hasArea(mc.area_sqm)) parts.push(`${nf.format(mc.area_sqm)} m²`);
+    if (hasArea(mc.covered_area_sqm)) {
+      parts.push(`${nf.format(mc.covered_area_sqm)} m² cub.`);
+      // En casas, el lote cuando es más grande que la cubierta (misma lectura que la ficha de la card).
+      if (mc.property_type === "house" && hasArea(mc.area_sqm) && mc.area_sqm > mc.covered_area_sqm) parts.push(`${nf.format(mc.area_sqm)} m² lote`);
+    } else if (hasArea(mc.area_sqm)) parts.push(`${nf.format(mc.area_sqm)} m²`);
   }
-  if (mc.price_per_sqm != null && Number.isFinite(mc.price_per_sqm)) {
-    parts.push(`US$ ${(mc.price_per_sqm >= 10 ? nf : nf1).format(mc.price_per_sqm)}/m²`);
+  if (withSqm) {
+    const sqm = miniCardSqm(mc);
+    if (sqm) parts.push(sqm);
   }
   return parts.join(" · ");
+}
+
+/** "US$ 375/m²" del similar (base de P2: cubierta en vivienda, total en lotes); null sin dato. */
+export function miniCardSqm(mc: Pick<MiniCard, "price_per_sqm">): string | null {
+  if (mc.price_per_sqm == null || !Number.isFinite(mc.price_per_sqm)) return null;
+  return `US$ ${(mc.price_per_sqm >= 10 ? nf : nf1).format(mc.price_per_sqm)}/m²`;
 }
 
 export interface ComparablesPoolInfo {
@@ -407,15 +452,77 @@ export function comparablesPoolInfo(
   // "80 alquileres similares" · "30 casas similares" · "4 lotes rurales similares con servicios" (como lo dice P2).
   const unit = positionUnit(card).replace(/^(lotes rurales)( con servicios)?$/, "$1 similares$2").replace(/^(?!.*similares).*$/, (u) => `${u} similares`);
   const zone = zoneName(card.zone);
+  const dorm = poolByBedrooms(card) && card.bedrooms ? `, ${card.bedrooms} dorm.` : "";
   const where =
     pool.scope === "adjacent_zones" ? `en ${zone} y zonas vecinas` : pool.scope === "macro_zone" ? `en ${zone} y alrededores` : `en ${zone}`;
-  const summary = `Comparado con ${nf.format(pool.count)} ${unit} ${where}${card.bedrooms ? `, ${card.bedrooms} dorm.` : ""}`;
+  const summary = `Comparado con ${nf.format(pool.count)} ${unit} ${where}${dorm}`;
   const notListed = pool.not_listed > 0 ? pool.not_listed : 0;
   const hidden =
     notListed > 0
       ? `${nf.format(pool.listed)} a la vista · ${notListed === 1 ? "el otro no se muestra porque no publica" : `los otros ${nf.format(notListed)} no se muestran porque no publican`} foto o superficie`
       : null;
   return { summary, hidden };
+}
+
+/**
+ * Cuáles similares van a la vista (decisión de German, 03/10): las N de
+ * superficie más parecida a la de la propiedad — el mismo criterio con el
+ * que P3 recorta su conjunto a 30 —, mostradas por precio. Base: cubierta en
+ * vivienda, total en lotes (la misma con la que P3 compara). Sin superficie
+ * en la propiedad, las N de precio más cercano. Empates: precio más cercano
+ * y después el id, así la selección no depende del orden de llegada.
+ * `all` queda ordenada por precio en USD (los sin precio al final).
+ */
+export function pickSimilars<T extends MiniCard>(
+  comparables: T[],
+  property: Pick<Card, "property_type" | "covered_area_sqm" | "area_sqm" | "price_usd">,
+  n: number,
+): { shown: T[]; all: T[] } {
+  const land = property.property_type === "land";
+  const base = (c: Pick<MiniCard, "area_sqm" | "covered_area_sqm">) => (land ? c.area_sqm : (c.covered_area_sqm ?? c.area_sqm)) ?? null;
+  const target = base(property);
+  const price = property.price_usd ?? null;
+  const priceGap = (c: MiniCard) => (price != null && c.price_usd != null ? Math.abs(c.price_usd - price) : Number.POSITIVE_INFINITY);
+  const closeness = (c: MiniCard) => {
+    const b = base(c);
+    return target != null && b != null ? Math.abs(b - target) : Number.POSITIVE_INFINITY;
+  };
+  const byPrice = (a: MiniCard, b: MiniCard) =>
+    (a.price_usd ?? Number.POSITIVE_INFINITY) - (b.price_usd ?? Number.POSITIVE_INFINITY) || String(a.id).localeCompare(String(b.id));
+  const all = [...comparables].sort(byPrice);
+  const shown = [...comparables]
+    .sort((a, b) => closeness(a) - closeness(b) || priceGap(a) - priceGap(b) || String(a.id).localeCompare(String(b.id)))
+    .slice(0, Math.max(0, n))
+    .sort(byPrice);
+  return { shown, all };
+}
+
+/**
+ * Dónde cae la propiedad entre sus similares, ordenados por precio: el índice
+ * del primero más caro (ahí se intercala "Esta casa"). Sin precio, al final.
+ */
+export function selfIndexByPrice(sorted: Pick<MiniCard, "price_usd">[], priceUsd: number | null | undefined): number {
+  if (priceUsd == null) return sorted.length;
+  const i = sorted.findIndex((c) => c.price_usd != null && c.price_usd > priceUsd);
+  return i === -1 ? sorted.length : i;
+}
+
+/**
+ * Tira de precios de "Avisos similares": la posición de cada precio entre el
+ * mínimo y el máximo del conjunto (y la propiedad), en porcentaje. Es la
+ * misma información que el percentil, dibujada: ningún cálculo nuevo.
+ */
+export function priceStrip(
+  comparables: Pick<MiniCard, "id" | "price_usd">[],
+  propertyPriceUsd: number | null | undefined,
+): { min: number; max: number; x: (v: number) => number } | null {
+  const prices = comparables.map((c) => c.price_usd).filter((v): v is number => v != null && Number.isFinite(v));
+  if (propertyPriceUsd != null) prices.push(propertyPriceUsd);
+  if (prices.length < 2) return null;
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  const x = (v: number) => (max === min ? 50 : Math.round(((v - min) / (max - min)) * 1000) / 10);
+  return { min, max, x };
 }
 
 /**

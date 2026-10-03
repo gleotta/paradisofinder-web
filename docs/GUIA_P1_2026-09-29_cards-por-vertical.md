@@ -1,6 +1,6 @@
 # Guía de cambios en P1 — Cards por vertical — 2026-09-29
 
-**Para: el equipo de P1 (este repo). Estado: Fase 0 ejecutada el 29/09 — qué se hizo y dónde se apartó de esta guía, en §8. P3 entregó el 30/09 — qué cambia para P1, en §9. P2 entregó el 30/09-01/10 — qué cambió P1 y qué verificó, en §10.**
+**Para: el equipo de P1 (este repo). Estado: Fase 0 ejecutada el 29/09 — qué se hizo y dónde se apartó de esta guía, en §8. P3 entregó el 30/09 — qué cambia para P1, en §9. P2 entregó el 30/09-01/10 — qué cambió P1 y qué verificó, en §10. German revisó el detalle el 02-03/10 — "Avisos similares" de 5 con foto y el hallazgo de las cards sin Zona, en §11.**
 
 Qué es este documento: **la guía de ejecución de P1**. Sale de las 21
 decisiones cerradas con German el 29/09, que están registradas con su
@@ -488,7 +488,24 @@ o el 53 % en alquiler por encima de 30), ordenado por precio en USD, y
 | `cards-{alquilar,comprar,invertir,lotes}.spec.ts` | P1 `:3001` con `P2_MODE=mock` | 37 pasan · 0 fallan (una corrida previa tuvo 1 timeout de búsqueda en "chips" de Alquilar mientras t3 corría en paralelo contra el mismo server; sola, pasa) |
 | `cards-*.spec.ts`, modo contrato | P1 `:3002` con `P2_MODE=live` → P2 Docker local `:8000` (imagen del 30/09, base de P3 del 29/09) | 36 pasan · 0 fallan · 1 omitida en la primera corrida (renta en pesos; la prueba pasó a correr también en vivo y pasa: "US$ 485 (≈ $ 750.000)") |
 | `t3-card`, `t4-consultar`, `detalle-mapa`, `compartir-og-sitemap` | P1 `:3001` con `P2_MODE=mock` | 11 pasan |
+| **`cards-*.spec.ts`, modo contrato, PRODUCCIÓN** (aceptación del cableado, §8.7) | `https://paradisofinder.com` (P1 `0ba1a2d`) → P2 de Railway por la red privada, versión del 01/10 | **37 pasan · 0 fallan** (4,6 min) |
 
+**Gate del video (§6), medido en producción el 01/10 sobre el top 20 de dos
+consultas de venta, en Comprar:**
+
+| Criterio | "casas en venta en capital" | "casas en venta hasta 100 mil dólares" |
+|---|---|---|
+| Sin "None"/"unknown"/"NaN", sin siglas, sin "Score"/"Renta est." | cumple (0 de 20) | cumple (0 de 20) |
+| Ningún rojo ni amarillo (fondos de bloques y etiquetas) | cumple | cumple |
+| Aviso de estimación en toda card | 20 de 20 | 20 de 20 |
+| Bloque de posición en toda card con gap | 20 de 20 (todas verdes: el orden por oportunidad pone primero las de mayor descuento) | 20 de 20 |
+| Zona visible en toda card con celda propia | 20 de 20, todas propias | 20 de 20, 19 propias y 1 "(zona ampliada)"; 2 en suba (verde) |
+| Al menos una flecha "En baja" en el top 20 | 2 | 1 |
+| Detalle: similares, mapa y "Consultar" | 30 similares, mapa, Consultar | 29 similares de 30 ("el otro no se muestra…"), mapa, Consultar |
+
+**El gate pasa: se puede grabar.** Invertir sigue fuera del video hasta que P3
+aplique la regla de rentabilidad null con diferencia mayor a +35 % (respuesta
+aprobada el 01/10).
 Visto a ojo contra P2 real (versión del 01/10): el alquiler `b69a7ce1…` (75
 similares, 37 a la vista) dice "Comparado con 75 alquileres similares en
 Capital, 3 dorm. · 37 a la vista · los otros 38 no se muestran porque no
@@ -499,10 +516,125 @@ similares en Pocito" con sus 4.
 
 ### 10.6 Pendiente
 
-- Deploy de P2 al stage y la batería en modo contrato contra el stage
-  (aceptación del cableado, §8.7).
-- §8.6 (lotes: gap 34,7 con `yellow` y 4 comparables) sigue en el Docker local
-  del 01/10; anotado otra vez en la respuesta a P2, que German aprobó dejarlo
-  abierto para P2/P3.
-- Commit de P1 (los cambios del 29/09 y del 01/10 siguen sin commitear).
+- Hecho el 01/10: P1 (`0ba1a2d`) y P2 (versión del 01/10) en producción;
+  batería en modo contrato contra producción, 37/37; gate del video, pasa.
+- §8.6 (lotes: gap 34,7 con `yellow` y 4 comparables): abierto para P2/P3,
+  anotado en la respuesta a P2 (German aprobó dejarlo así).
+- P3: aplicar la §B y la rentabilidad null con gap > +35 % (aprobadas el
+  01/10); hasta entonces Invertir no va al video.
+- Grabar el video (§6) con una de las dos consultas medidas.
 - Gate del video (§6), en el stage.
+
+---
+
+## 11. "Avisos similares" de 5, con foto, y las cards sin Zona (02-03/10)
+
+German vio la sección con 29 fichas en cuadrícula y la rechazó: "no sé de
+dónde salió, se ve feo; como mucho 10, y con miniatura de la foto". Pidió
+saber de dónde salen los 30, dónde tocar, y por qué hay cards sin el bloque
+Zona. Aprobó el mockup (https://claude.ai/artifact/FKzocz41C9GX55MsUqnmPG),
+propuesta A, **con 5**.
+
+### 11.1 De dónde salen los 30, y por qué el recorte es de P1
+
+- **P3** arma el conjunto con el que mide el precio (`_select_comparables`):
+  misma zona (vecinas si hay menos de 3), misma categoría, cubierta ±30 %, y
+  en departamentos el mismo tramo de dormitorios; si quedan más de 30 se queda
+  con las 30 de superficie más parecida (`COMPARABLE_MAX`). Es la muestra de
+  la mediana, el porcentaje y el percentil: no se toca por una razón de
+  pantalla.
+- **P2** reconstruye ese conjunto exacto y lista todos los que se pueden
+  mostrar, por precio (01/10). Dejó por escrito que el recorte visual es de
+  P1, y la cabecera "comparado con 30" necesita el conjunto entero.
+- **"Podrían interesarte"** (fin del listado) es otra cosa: las elige P2 por
+  parecido semántico con la **consulta**, no con una propiedad, y solo cuando
+  el listado se agota. No entran al detalle y no se mezclan.
+
+### 11.2 Lo que P1 cambió
+
+| Qué | Dónde |
+|---|---|
+| A la vista, las **5 de superficie más parecida** (el criterio de P3), por precio, con la propiedad intercalada en su lugar ("Esta casa"); "Ver los N similares" despliega el conjunto entero en las mismas filas (`comparables_expanded`) | `pickSimilars`, `selfIndexByPrice` en `src/lib/format.ts`; `SIMILARS_VISIBLE`, `SELF_LABEL` en `src/lib/labels.ts`; `similarRows()` en `src/app/propiedad/[id]/page.tsx`; `SimilarsSection` en `src/components/detail.tsx` |
+| **Tira de precios**: los precios del conjunto entero sobre una línea, la propiedad marcada; pasar por un punto resalta su fila | `priceStrip` en `format.ts`; `.pstrip*` en `globals.css` |
+| **Filas con miniatura**: precio, US$/m², conversión, ficha ("Casa · 3 dorm. · 100 m² cub. · 341 m² lote") | `miniCardMeta` (con el lote en casas), `miniCardSqm` |
+| **Miniatura sin depender de P2**: `/og/propiedad/<id>.t.jpg` (352×264, ~12 KB), misma caché que la og:image; cuando P2 mande `photo_url` en el similar se usa directa | `src/app/og/propiedad/[file]/route.ts` |
+| **", 3 dorm." solo cuando el conjunto se arma por dormitorios** (alquiler; departamentos en venta por tramo). En casas en venta y lotes era falso: entre las 30 casas similares de una de 3 dormitorios hay casas de 1 y 2 | `poolByBedrooms`, `poolWhere` en `format.ts` (card y cabecera del detalle) |
+| Pedido a P2: `photo_url` en `MiniCard` y `zone_ref` para vivienda sin dormitorios | `docs/PEDIDO_P1_A_P2_2026-10-03.md` (copiado al repo de P2) |
+
+Se fue `ComparablesGrid` (la cuadrícula). Las pruebas del detalle afirman 5
+filas como máximo, la fila propia, la tira, el orden por precio, miniaturas
+con la ruta propia y el botón "Ver los N similares" → N filas.
+
+### 11.3 Por qué hay cards sin el bloque Zona (medido el 03/10)
+
+Dos causas, ninguna un bug de P1:
+
+1. **Alquilar no muestra Zona por decisión** (decisión 15 del plan, 29/09):
+   la celda de alquiler trae `median_price` (alquiler mensual típico) y P1
+   la deja para el detalle ("Similares en la zona: US$ 453 (≈ $ 650.000)").
+   Toda card de Alquilar sale sin el bloque. **Revisar con German:** hoy
+   `zone_ref.median_price` llega en el 85 % de los alquileres y podría ir en
+   la card como "Alquiler típico en Capital, 2 dorm.: US$ 453/mes".
+2. **Vivienda sin dormitorios informados → `zone_ref: null`.** La celda de P3
+   es por tipo y tramo de dormitorios; sin dormitorios P2 no sirve ninguna,
+   porque el pedido de P1 del 29/09 decía "sin dormitorios → null, no todos"
+   (error de P1). Medido sobre el Docker local: 11 % de los departamentos en
+   venta de Capital, 7 % de los de alquiler; en toda la base 32 de 708
+   departamentos en venta, 36 de 356 en alquiler, 9 de 1.748 casas. Casas en
+   venta, lotes y las consultas del video: 0 %. P3 publica la celda `todos`
+   del tipo (13 a 19 zonas) y una `sin_dato` (5 zonas): el pedido del 03/10
+   le pide a P2 servir `todos` con `bucket: "todos"`. P1 no cambia: el bloque
+   no muestra el bucket.
+
+Un caso suelto: un alquiler con `bedrooms: 0` sin celda (está en el pedido).
+
+### 11.4 Por qué hay cards sin el bloque de posición (lo que German preguntaba)
+
+La pregunta de German era por el **bloque de posición** (el porcentaje contra
+similares), no por Zona. P1 lo muestra siempre que `valuation_gap_pct`
+llega; cuando falta, hasta hoy quedaba un hueco. Medido el 03/10 sobre la base
+local (vivienda activa, tier ≥ 1):
+
+| Causa | Cuántas | Dónde se arregla |
+|---|---|---|
+| **Alquiler sin cubierta con gap calculado por P3** que P2 descarta (`gap_ok` exige cubierta también en alquiler, donde el conjunto es por dormitorios) | 97 de 543 alquileres (18 %) | P2 (`PEDIDO_P1_A_P2_2026-10-03.md` §3) |
+| **Gap calculado con 3 o 4 comparables** (P3 calcula desde 3; P2 exige 5) | 54 ventas, 14 alquileres | P3 amplía la zona hasta 5 (`PEDIDO_P1_A_P3_2026-10-03.md` §4); alternativa P2 acepta 3 |
+| **Departamentos sin cubierta con total** | 171 de 708 (24 %) | P3: usar la total como base (§1) |
+| **Casas sin cubierta** | 225 de 1.748 (13 %) | decisión de German: nada, o comparación por dormitorios marcada (§3) |
+| **Vivienda con cubierta sin dormitorios** | 26 departamentos en venta y parte de 55 alquileres | P3: conjunto por banda sin tramo (§2) |
+| Conjunto de 1 o 2 avisos | 15 ventas | se queda así |
+
+En las consultas ordenadas por oportunidad (las del video) el top 100 no tiene
+ninguna sin gap, porque el orden premia el descuento; en las consultas por
+zona el agujero va del 3 % (casas en Capital) al 29 % (casas en Rawson) y al
+34 % (departamentos en Capital).
+
+**Lo que P1 hizo:** la card ya no deja el hueco. Sin gap muestra el motivo
+de P2/P3 tal cual (`positionMissingReason`: "Sin superficie cubierta: no se
+puede comparar el precio por m²", "Hay menos de 5 avisos similares en la
+zona: no alcanza para comparar el precio"), en neutro, en el lugar del
+bloque. Verificado contra P2 real: en "casas en venta en Caucete", 9 de las 10
+primeras cards salen con el motivo ("Hay menos de 5 avisos similares en la
+zona…" en 8, "Sin superficie cubierta…" en 1) en lugar del hueco.
+
+**Regla nueva de German (03/10): prohibido probar con mocks, para siempre.**
+Toda verificación de acá en adelante corre contra P2 real (Docker local o
+producción). Las aserciones de casos fijos de la batería no se corren más.
+
+### 11.5 Resultado de las pruebas (03/10)
+
+`tsc`, `eslint` y `npm run build` limpios. Playwright, proyecto `mobile`, contra
+`next start` del build final y **P2 real** (Docker local, versión del 01/10):
+
+| Corrida | Resultado |
+|---|---|
+| `cards-{alquilar,comprar,invertir,lotes}.spec.ts`, modo contrato, build final (similares de 5, motivo sin gap, ", dorm." corregido) | 37 pasan · 0 fallan (4,1 min) |
+
+Visto a ojo con datos reales: Casa en Rawson `45cd6b1f…` ("Comparado con 30
+casas similares en Rawson · 29 a la vista · el otro no se muestra porque no
+publica foto o superficie"; a la vista US$ 35.000 · 45.000 · **47.000 (Esta
+casa)** · 55.000 · 58.000 · 59.000, las 5 de 100 m² cubiertos; miniaturas de
+352×264 desde la ruta propia; "Ver los 29 similares" despliega las 29 y vuelve
+con "Ver solo los 5 más parecidos"); y "casas en venta en Caucete", donde 9 de
+las 10 primeras cards muestran el motivo de P2 en lugar del hueco. Falta
+deploy, los pedidos a P2/P3, y rehacer el gate antes de regrabar.

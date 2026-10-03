@@ -236,70 +236,164 @@ export function SourceLinks({
   );
 }
 
-/** Un aviso similar ya formateado en el server (precio, conversión y ficha). */
-export interface ComparableItem {
+/** Una fila de "Avisos similares", ya formateada en el server. */
+export interface SimilarRow {
   id: string | null;
+  /** true = la propiedad del detalle, intercalada en su lugar por precio. */
+  self?: boolean;
+  /** "Esta casa" (solo en la fila propia). */
+  label?: string;
   price: string;
   secondary: string | null;
+  /** "US$ 375/m²", en la línea del precio. */
+  sqm: string | null;
   meta: string;
+  thumb: string | null;
+  /** Posición en la tira de precios (0-100) o null sin precio en dólares. */
+  x: number | null;
 }
 
 /**
- * Lista de avisos similares del detalle (respuesta de P2 30/09-01/10): P2
- * manda el conjunto entero que se puede mostrar — hasta 30 en venta y lotes,
- * SIN tope en alquiler (hoy hasta 103) —, así que se ven los primeros
- * `visible` y el resto se despliega a pedido. El recorte es de P1.
+ * "Avisos similares" del detalle (decisión de German, 03/10, sobre el mockup
+ * aprobado): P2 manda el conjunto entero con el que P3 midió el precio; P1
+ * muestra las 5 de superficie más parecida, por precio, con la propiedad
+ * intercalada en su lugar ("Esta casa"), y una tira con TODOS los precios
+ * del conjunto. "Ver los N similares" despliega el resto en las mismas
+ * filas. Las miniaturas salen de `/og/propiedad/<id>.t.jpg` hasta que P2
+ * mande `photo_url` en cada similar.
  */
-export function ComparablesGrid({
-  items,
-  visible,
+export function SimilarsSection({
+  shown,
+  all,
+  strip,
+  moreLabel,
+  lessLabel,
   searchId,
   propertyId,
 }: {
-  items: ComparableItem[];
-  visible: number;
+  shown: SimilarRow[];
+  all: SimilarRow[];
+  strip: { minLabel: string; maxLabel: string; selfLabel: string } | null;
+  moreLabel: string;
+  lessLabel: string;
   searchId: string | null;
   propertyId: string;
 }) {
-  const [all, setAll] = useState(false);
-  const shown = all ? items : items.slice(0, visible);
-  const rest = items.length - shown.length;
+  const [open, setOpen] = useState(false);
+  const [hover, setHover] = useState<string | null>(null);
+  const rows = open ? all : shown;
+  const rest = all.length - shown.length;
+  const self = all.find((r) => r.self) ?? null;
+  // Puntos de la tira: duplicados de precio apilados hacia arriba, así no se tapan.
+  const stacks = new Map<number, number>();
+  const points = all
+    .filter((r): r is SimilarRow & { x: number } => !r.self && r.x != null)
+    .map((r) => {
+      const k = Math.round(r.x);
+      const lift = stacks.get(k) ?? 0;
+      stacks.set(k, lift + 1);
+      return { ...r, lift };
+    });
   return (
     <>
-      <div className="minicards">
-        {shown.map((it, i) => {
+      {strip && points.length > 0 && (
+        <div className="pstrip" data-testid="price-strip" aria-label="Precio de esta propiedad entre sus similares">
+          <div className="pstrip-plot">
+            <div className="pstrip-axis" aria-hidden />
+            {points.map((r) => (
+              <span
+                key={r.id ?? r.x}
+                className={`pstrip-dot${hover === r.id ? " pstrip-dot--on" : ""}`}
+                style={{ left: `${r.x}%`, bottom: `${14 + r.lift * 11}px` }}
+                title={`${r.price}${r.meta ? ` · ${r.meta}` : ""}`}
+                onMouseEnter={() => setHover(r.id)}
+                onMouseLeave={() => setHover(null)}
+              />
+            ))}
+            {self?.x != null && (
+              <>
+                <span className="pstrip-self" style={{ left: `${self.x}%` }} aria-hidden />
+                <span
+                  className={`pstrip-label${self.x < 18 ? " pstrip-label--start" : self.x > 82 ? " pstrip-label--end" : ""}`}
+                  style={{ left: `${self.x}%` }}
+                >
+                  {strip.selfLabel}
+                </span>
+              </>
+            )}
+          </div>
+          <div className="pstrip-ticks" aria-hidden>
+            <span>{strip.minLabel}</span>
+            <span>{strip.maxLabel}</span>
+          </div>
+        </div>
+      )}
+
+      <ul className="simrows">
+        {rows.map((r, i) => {
           const body = (
             <>
-              <div className="mprice">
-                {it.price}
-                {it.secondary && <small style={{ color: "var(--muted)", fontWeight: 400 }}> {it.secondary}</small>}
-              </div>
-              {it.meta && <div className="mmeta">{it.meta}</div>}
+              {r.thumb ? (
+                // Fotos de portales arbitrarios / miniatura propia: <img> plano; si falla, queda el fondo.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="simrow-thumb" src={r.thumb} alt="" loading="lazy" width={88} height={66} onError={(e) => (e.currentTarget.style.visibility = "hidden")} />
+              ) : (
+                <span className="simrow-thumb" aria-hidden />
+              )}
+              <span className="simrow-main">
+                <span className="simrow-price">
+                  <strong>{r.price}</strong>
+                  {r.secondary && <span className="simrow-sec">{r.secondary}</span>}
+                  {r.sqm && <span className="simrow-sec simrow-sqm">{r.sqm}</span>}
+                  {r.self && r.label && <span className="simrow-selftag">{r.label}</span>}
+                </span>
+                {r.meta && <span className="simrow-meta">{r.meta}</span>}
+              </span>
+              {!r.self && <span className="simrow-go" aria-hidden>Ver ↗</span>}
             </>
           );
-          return it.id ? (
-            <MiniCardLink id={it.id} searchId={searchId} key={it.id}>
-              {body}
-            </MiniCardLink>
-          ) : (
-            <div className="minicard" key={i}>
-              {body}
-            </div>
+          if (r.self) {
+            return (
+              <li className="simrow simrow--self" key="self" data-testid="similar-self">
+                {body}
+              </li>
+            );
+          }
+          const on = hover != null && hover === r.id;
+          return (
+            <li className={`simrow${on ? " simrow--on" : ""}`} key={r.id ?? i} data-testid="similar-row" data-id={r.id ?? undefined}>
+              {r.id ? (
+                <a
+                  className="simrow-link"
+                  href={detailHref(r.id, { searchId, from: "comparable" })}
+                  target="_blank"
+                  rel="noopener"
+                  onClick={() => trackCardClick({ id: r.id!, opportunity_score: null }, "comparable", null)}
+                >
+                  {body}
+                </a>
+              ) : (
+                <span className="simrow-link">{body}</span>
+              )}
+            </li>
           );
         })}
-      </div>
+      </ul>
+
       {rest > 0 && (
         <div className="comparables-more">
           <button
             type="button"
             className="btn btn-ghost btn-sm"
             data-testid="comparables-more"
+            aria-expanded={open}
             onClick={() => {
-              setAll(true);
-              trackEvent(EVENTS.COMPARABLES_EXPANDED, { property_id: propertyId, shown: shown.length, total: items.length });
+              const next = !open;
+              setOpen(next);
+              if (next) trackEvent(EVENTS.COMPARABLES_EXPANDED, { property_id: propertyId, shown: shown.length, total: all.length });
             }}
           >
-            Mostrar los {rest} restantes
+            {open ? lessLabel : moreLabel}
           </button>
         </div>
       )}

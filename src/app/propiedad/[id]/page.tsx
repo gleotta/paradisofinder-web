@@ -2,7 +2,7 @@ import { cache } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getProperty } from "@/lib/p2/client";
-import type { DealRating, PropertyDetail, Reason } from "@/lib/p2/types";
+import type { DealRating, PropertyDetail, PropertyDetailResponse, Reason } from "@/lib/p2/types";
 import {
   AGE_FLAG_LABEL,
   CONDITION_LABEL,
@@ -14,6 +14,9 @@ import {
   OPERATION_LABEL,
   RATING_LABEL,
   ROOM_CLASS_LABEL,
+  SELF_LABEL,
+  SELF_LABEL_DEFAULT,
+  SIMILARS_VISIBLE,
 } from "@/lib/labels";
 import {
   cardVertical,
@@ -30,16 +33,20 @@ import {
   mainPrice,
   miniCardMeta,
   miniCardPrice,
+  miniCardSqm,
   percentilePhrase,
+  pickSimilars,
   positionPhrase,
   pricePerSqm,
+  priceStrip,
   secondaryPrice,
+  selfIndexByPrice,
   zoneName,
   zoneRefInfo,
 } from "@/lib/format";
 import { EstimateBlock, EstimateNotice, SignalBadge, ZoneBlock, ratingDotStyle } from "@/components/signals";
 import DetailMap from "@/components/DetailMap";
-import { BackLink, ComparablesGrid, ContactActions, DetailTracker, Gallery, SourceLinks, type ComparableItem } from "@/components/detail";
+import { BackLink, ContactActions, DetailTracker, Gallery, SimilarsSection, SourceLinks, type SimilarRow } from "@/components/detail";
 import { isCardOrigin, isSearchId } from "@/lib/tracking-ids";
 import { isVerticalId } from "@/lib/vertical";
 import { siteUrl } from "@/lib/server/contact";
@@ -60,14 +67,16 @@ import { propertyOgImageUrl, propertyShareUrl } from "@/lib/share";
  * card; se fueron los "indicadores secundarios" y el sello "Datos completos".
  *
  * Respuesta de P2 del 30/09-01/10 (`docs/RESPUESTA_P2_A_P1_2026-09-30.md`):
- * "Avisos similares" lista el conjunto entero con el que P3 midió el precio
- * (hasta 30 en venta y lotes, sin tope en alquiler → P1 muestra 30 y ofrece el
- * resto), con `comparables_pool` en la cabecera; y el vocabulario propio del
- * detalle quedó sin jerga (nada de "percentil", "comparables" ni "score").
+ * "Avisos similares" recibe el conjunto entero con el que P3 midió el precio
+ * (hasta 30 en venta y lotes, sin tope en alquiler), con `comparables_pool`
+ * en la cabecera; y el vocabulario propio del detalle quedó sin jerga.
+ *
+ * 03/10 (German, sobre el mockup aprobado): a la vista van las 5 de superficie
+ * más parecida, por precio, con la propiedad intercalada ("Esta casa"), una
+ * tira con todos los precios del conjunto y "Ver los N similares" para el
+ * resto. Las miniaturas salen de `/og/propiedad/<id>.t.jpg` (P2 no manda la
+ * foto del similar; pedida).
  */
-
-/** Avisos similares a la vista antes de "Mostrar los N restantes". */
-const COMPARABLES_VISIBLE = 30;
 
 const load = cache((id: string) => getProperty(id));
 
@@ -139,10 +148,7 @@ export default async function PropertyPage({
   const estimate = layout === "invertir" ? estimateInfo(p) : null;
   const comparables = data.comparables ?? [];
   const pool = comparablesPoolInfo(data.comparables_pool, p);
-  const comparableItems: ComparableItem[] = comparables.map((mc) => {
-    const price = miniCardPrice(mc);
-    return { id: clean(mc.id), price: price.main, secondary: price.secondary, meta: miniCardMeta(mc, p.zone) };
-  });
+  const similars = similarRows(p, comparables);
   const scoreComponents = data.score_components ?? p.score_components ?? [];
   const title = `${PROPERTY_TYPE_LABEL[p.property_type] ?? "Propiedad"} en ${zoneName(p.zone)}`;
   const photos = (p.photos?.length ? p.photos : p.photo_url ? [p.photo_url] : []).map(clean).filter((x): x is string => !!x);
@@ -285,10 +291,21 @@ export default async function PropertyPage({
                 {pool.hidden && <> · {pool.hidden}</>}
               </p>
             )}
-            {comparableItems.length === 0 ? (
+            {similars.all.length <= 1 ? (
               <p className="section-note">Por ahora no hay avisos similares para mostrar de esta propiedad.</p>
             ) : (
-              <ComparablesGrid items={comparableItems} visible={COMPARABLES_VISIBLE} searchId={searchId} propertyId={p.id} />
+              <>
+                <p className="section-note similars-note">{similars.note}</p>
+                <SimilarsSection
+                  shown={similars.shown}
+                  all={similars.all}
+                  strip={similars.strip}
+                  moreLabel={similars.moreLabel}
+                  lessLabel={similars.lessLabel}
+                  searchId={searchId}
+                  propertyId={p.id}
+                />
+              </>
             )}
           </section>
 
@@ -357,6 +374,68 @@ export default async function PropertyPage({
 }
 
 /* ------------------------------------------------------------------ */
+
+/**
+ * Filas de "Avisos similares" (03/10): las `SIMILARS_VISIBLE` de superficie
+ * más parecida y el conjunto entero, las dos por precio y con la propiedad
+ * intercalada en su lugar; más la tira de precios y los textos del botón.
+ * Todo formateado acá (server): el componente solo dibuja.
+ */
+function similarRows(p: PropertyDetail, comparables: NonNullable<PropertyDetailResponse["comparables"]>) {
+  const { shown, all } = pickSimilars(comparables, p, SIMILARS_VISIBLE);
+  const strip = priceStrip(all, p.price_usd);
+  const toRow = (mc: (typeof comparables)[number]): SimilarRow => {
+    const id = clean(mc.id);
+    const price = miniCardPrice(mc);
+    return {
+      id,
+      price: price.main,
+      secondary: price.secondary,
+      sqm: miniCardSqm(mc),
+      meta: miniCardMeta(mc, p.zone, { withSqm: false }),
+      thumb: id ? `/og/propiedad/${encodeURIComponent(id)}.t.jpg` : null,
+      x: strip && mc.price_usd != null ? strip.x(mc.price_usd) : null,
+    };
+  };
+  const self: SimilarRow = {
+    id: p.id,
+    self: true,
+    label: SELF_LABEL[p.property_type] ?? SELF_LABEL_DEFAULT,
+    price: mainPrice(p),
+    secondary: secondaryPrice(p),
+    // US$/m² sobre la misma base que los similares: cubierta en vivienda (price_per_sqm), total en lotes.
+    sqm: miniCardSqm({ price_per_sqm: p.property_type === "land" ? (p.price_per_sqm_land ?? null) : p.price_per_sqm }),
+    meta: miniCardMeta(p, p.zone, { withSqm: false }),
+    thumb: clean(p.photo_url) ?? `/og/propiedad/${encodeURIComponent(p.id)}.t.jpg`,
+    x: strip && p.price_usd != null ? strip.x(p.price_usd) : null,
+  };
+  const withSelf = (list: typeof comparables) => {
+    const rows = list.map(toRow);
+    rows.splice(selfIndexByPrice(list, p.price_usd), 0, self);
+    return rows;
+  };
+  const unit = SELF_LABEL[p.property_type] ? SELF_LABEL[p.property_type]!.split(" ")[1] : "propiedad";
+  const total = all.length;
+  const n = shown.length;
+  const note =
+    n < total
+      ? `A la vista, ${n === 1 ? "la" : "las"} ${n} de superficie más parecida a esta ${unit}; el resto, con "Ver los ${total} similares".`
+      : `A la vista, ${total === 1 ? "el único similar que se puede mostrar" : `los ${total} similares que se pueden mostrar`}, por precio.`;
+  return {
+    shown: withSelf(shown),
+    all: withSelf(all),
+    strip: strip
+      ? {
+          minLabel: `US$ ${fmtInt(strip.min)}`,
+          maxLabel: `US$ ${fmtInt(strip.max)}`,
+          selfLabel: `${self.label} · ${p.price_usd != null ? `US$ ${fmtInt(p.price_usd)}` : mainPrice(p)}`,
+        }
+      : null,
+    moreLabel: `Ver los ${total} similares`,
+    lessLabel: `Ver solo ${n === 1 ? "el" : "los"} ${n} más ${n === 1 ? "parecido" : "parecidos"}`,
+    note,
+  };
+}
 
 function flagList(p: PropertyDetail): { label: string; tone: "warn" | "ok" }[] {
   const out: { label: string; tone: "warn" | "ok" }[] = [];

@@ -1081,7 +1081,14 @@ export function mockCard(
     primary_signal,
     deal_rating: deal,
     // Clave real de P2 (verificada contra Swagger 29/08).
-    deal_rating_reasons: deal ? (deal === "red" && capped ? rentOverpricedReasons(comparables) : DEAL_REASONS[deal]) : null,
+    // Sin gap, P2 manda igual el motivo (rating null = no evaluado): la card lo muestra en vez de un hueco.
+    deal_rating_reasons: deal
+      ? deal === "red" && capped
+        ? rentOverpricedReasons(comparables)
+        : DEAL_REASONS[deal]
+      : !hasGap && !isTemp
+        ? [{ code: "pocos_comparables", text: "Hay menos de 5 avisos similares en la zona: no alcanza para comparar el precio" }]
+        : null,
     resale_investment_rating: resale,
     resale_investment_reasons: resale ? RESALE_REASONS[resale] : null,
     rental_investment_rating: rentalR,
