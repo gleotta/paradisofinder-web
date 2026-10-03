@@ -106,14 +106,39 @@ for (const [qi, q] of queries.entries()) {
   await d.goto(`${base}${href}`);
   await d.locator("h1").waitFor();
   const main = await d.locator("main").innerText();
+  // "Avisos similares" (guía §11): a la vista hasta 5 filas con miniatura, la propiedad
+  // intercalada, la tira de precios y "Ver los N similares" cuando hay más.
+  const section = d.locator("section#comparables");
+  const rows = section.getByTestId("similar-row");
+  const nRows = await rows.count();
+  if (nRows) {
+    await section.scrollIntoViewIfNeeded();
+    // Las miniaturas son lazy y la primera vez se generan en el server (/og/propiedad/<id>.t.jpg).
+    await d
+      .waitForFunction(
+        () => [...document.querySelectorAll('[data-testid="similar-row"] img.simrow-thumb')].every((img) => img.complete),
+        null,
+        { timeout: 30_000 },
+      )
+      .catch(() => {});
+  }
+  const fotos = nRows
+    ? await rows.evaluateAll((els) => els.filter((el) => el.querySelector("img.simrow-thumb")?.naturalWidth > 0).length)
+    : 0;
   const detail = {
     card: `#${pick + 1}`,
-    similares: await d.locator("section#comparables .minicard").count(),
+    similares: nRows,
+    fotos: `${fotos}/${nRows}`,
+    propia: await section.getByTestId("similar-self").count(),
+    tira: await section.getByTestId("price-strip").count(),
+    mas: await text(section.getByTestId("comparables-more")),
     cabecera: await text(d.getByTestId("comparables-pool")),
     mapa: (await d.locator("h2", { hasText: "Ubicación" }).count()) > 0,
     consultar: (await d.locator("a.btn-consult").count()) > 0,
     jerga: main.match(/Percentil|Opportunity Score|Comparables considerados|Renta bruta|\b(None|null|unknown|NaN)\b/)?.[0] ?? null,
   };
+  const detailOk =
+    nRows >= 1 && nRows <= 5 && fotos === nRows && detail.propia === 1 && detail.tira === 1 && detail.mapa && detail.consultar && !detail.jerga;
   await d.close();
 
   const checks = [
@@ -124,7 +149,7 @@ for (const [qi, q] of queries.entries()) {
     ["ningún 'verificar el aviso' en el top 10", s.verify === 0, String(s.verify)],
     ["Zona visible en toda card", s.zone === n, `${s.zone}/${n} (celda propia ${s.zoneOwn}, en suba ${s.zoneUp})`],
     ["al menos una flecha 'En baja' en el top 20", s.down >= 1, `en baja ${s.down}, en alta ${s.up}`],
-    ["detalle: similares, mapa y Consultar", detail.similares > 0 && detail.mapa && detail.consultar && !detail.jerga, JSON.stringify(detail)],
+    ["detalle: hasta 5 similares con foto, la propiedad y la tira; mapa y Consultar", detailOk, JSON.stringify(detail)],
   ];
   console.log("\nGATE:");
   for (const [label, ok, info] of checks) {

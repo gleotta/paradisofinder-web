@@ -636,5 +636,18 @@ publica foto o superficie"; a la vista US$ 35.000 · 45.000 · **47.000 (Esta
 casa)** · 55.000 · 58.000 · 59.000, las 5 de 100 m² cubiertos; miniaturas de
 352×264 desde la ruta propia; "Ver los 29 similares" despliega las 29 y vuelve
 con "Ver solo los 5 más parecidos"); y "casas en venta en Caucete", donde 9 de
-las 10 primeras cards muestran el motivo de P2 en lugar del hueco. Falta
-deploy, los pedidos a P2/P3, y rehacer el gate antes de regrabar.
+las 10 primeras cards muestran el motivo de P2 en lugar del hueco.
+
+### 11.6 Deploy local y gate (04/10)
+
+Commit `4521dd8` en `develop`: el CD local pasó las guardias (lint, tsc,
+build), rebuildeó el Docker del :3000 y el smoke contra el P2 real dio OK
+("casas en rawson": 204 coincidencias en los dos lados). El gate del video
+(`scripts/video-gate.mjs`) se adaptó al detalle nuevo: cuenta las filas
+`similar-row` (1 a 5), exige la foto cargada en todas, una `similar-self`,
+la tira de precios, mapa y Consultar. Contra el :3000 con "casas en venta
+hasta 100 mil dólares": las 8 comprobaciones pasan; detalle de la #1 (Rawson)
+= 5 similares, 5 de 5 fotos, "Ver los 29 similares". **El video se graba
+contra producción con el guion como texto**: queda para cuando P2 y P3
+entreguen sus pedidos; ese día el gate se corre contra
+`https://paradisofinder.com` (handoff §7).

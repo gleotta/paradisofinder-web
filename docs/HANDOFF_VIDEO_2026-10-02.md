@@ -12,13 +12,14 @@ Las cifras son de producción al 02/10/2026; el día de la grabación se vuelven
 El video muestra una consulta de venta real, en producción, y deja una sola idea: FINDER te
 dice, para cada casa, si el precio está por debajo de lo que piden casas similares, cuánto,
 contra cuántas y cómo viene la zona. Es el objetivo que fijó German el 28/09 al rediseñar las
-cards.
+cards. Se graba contra producción y el guion va como texto (German, 04/10): las líneas
+"Se dice" son ese texto.
 
 Tres frases que tienen que quedar en el espectador:
 
 - "Escribís lo que buscás, como lo dirías": texto libre, sin filtros.
-- "Cada casa viene con su comparación": X % por debajo de N casas similares de la zona, con
-  dormitorios, y el m² típico de la zona al lado.
+- "Cada casa viene con su comparación": X % por debajo de N casas similares de la zona y de
+  superficie parecida, y el m² típico de la zona al lado.
 - "Son valores orientativos": salen de avisos publicados, no de operaciones. Es el aviso que
   cierra cada card y hay que leerlo en voz alta una vez.
 
@@ -36,7 +37,7 @@ la semana del 28/09.
 | Batería de cards en modo contrato, mobile 380 px (37 pruebas) | 37 pasan, 0 fallan |
 | Gate del video sobre "casas en venta hasta 100 mil dólares" | pasa: 20 de 20 con posición, Zona y aviso de estimación; 1 "En baja" en el top 20; sin texto prohibido; sin rojo ni amarillo |
 | Gate del video sobre "casas en venta en capital" | pasa: 2 "En baja" en el top 20; Zona con celda propia en las 20 |
-| Detalle (similares, mapa, Consultar) | funciona en las dos consultas |
+| Detalle (similares, mapa, Consultar) | funciona en las dos consultas. Desde el 03/10 el detalle muestra 5 similares con foto, la propiedad intercalada y la tira de precios (verificado el 04/10 en local contra el P2 real: 5 de 5 fotos, "Ver los 29 similares"); el gate del día lo repite contra producción |
 
 Lo que cambia de un día a otro, y por eso el gate se repite el día de la grabación: el orden
 del top 20, las flechas "En baja" (P3 mira solo las últimas tres corridas) y el m² típico de
@@ -50,7 +51,7 @@ video quiere mostrar. Top 20 medido en producción el 02/10:
 
 | # | Card | Por qué sirve |
 |---|---|---|
-| 1 | Casa en Rawson, US$ 47.000, 3 dorm., 100 m² cub. · 341 m² lote | 33 % por debajo de 30 casas similares; Zona Rawson m² US$ 614 "En baja 2,3 %" en neutro. Datos completos: su detalle tiene mapa, 29 similares a la vista de 30 y WhatsApp de la inmobiliaria. **Es la card del plano del detalle.** |
+| 1 | Casa en Rawson, US$ 47.000, 3 dorm., 100 m² cub. · 341 m² lote | 33 % por debajo de 30 casas similares; Zona Rawson m² US$ 614 "En baja 2,3 %" en neutro. Datos completos: su detalle tiene mapa, 30 similares (5 a la vista con foto y "Ver los 29 similares" para el resto) y WhatsApp de la inmobiliaria. **Es la card del plano del detalle.** |
 | 2 | Casa en Capital, $ 75.000.000 (≈ US$ 48.544) | Precio publicado en pesos con su conversión al lado: FINDER compara en dólares. |
 | 3 | Casa en Caucete, $ 80.000.000 | "9 casas en Caucete" y Zona "(zona ampliada)": la honestidad cuando hay pocos avisos. |
 | 4 | Casa en Chimbas, US$ 47.000 | Zona Chimbas "En baja 11,3 %" en neutro; "publicado hace 3 meses · margen para negociar". |
@@ -87,19 +88,25 @@ pantalla; "se dice" es la idea, no un texto a leer.
    entendió qué, dónde y hasta cuánto.
 3. **La card (25-40 s), la #1: Casa en Rawson, US$ 47.000.** Se ve, de arriba a abajo:
    precio y US$ 470/m²; "5 amb. · 3 dorm. · 1 baño · 100 m² cub. · 341 m² lote"; el bloque
-   verde "33 % por debajo de similares · 30 casas en Rawson, 3 dorm." con la barra "más barato
+   verde "33 % por debajo de similares · 30 casas en Rawson" con la barra "más barato
    … más caro"; el bloque Zona "m² US$ 614 · En baja 2,3 %" en lila; "Actualizado hace 5
    días"; los chips Cochera y Patio; el aviso "Valores estimados a partir de avisos
-   publicados…". Se dice: una sola comparación por casa, contra casas parecidas de la misma
-   zona y con los mismos dormitorios; la zona es la referencia, no la comparación.
+   publicados…". Se dice: una sola comparación por casa, contra casas de la misma zona y de
+   superficie parecida; la zona es la referencia, no la comparación. (En casas en venta el
+   conjunto se arma por superficie cubierta, no por dormitorios: la card ya no dice ", 3 dorm.".)
 4. **Lo verde (40-50 s).** Scroll corto hasta la #8, Casa en Rivadavia US$ 65.000: la
    pastilla verde sobre la foto "En baja 13 % · antes US$ 75.000". Una card más abajo, la #9:
    el bloque Zona verde "En suba 2,8 %". Se dice: lo único que se pinta de verde es lo bueno
    para el que compra; todo lo demás va neutro.
 5. **El detalle (50-80 s).** Volver a la #1 y hacer clic en "ver similares": abre una pestaña
-   nueva parada en "Avisos similares": "Comparado con 30 casas similares en Rawson, 3 dorm. ·
-   29 a la vista · el otro no se muestra porque no publica foto o superficie", y las 29 cards
-   chicas ordenadas por precio, cada una con su US$/m². Subir despacio: la galería (22
+   nueva parada en "Avisos similares": "Comparado con 30 casas similares en Rawson · 29 a la
+   vista · el otro no se muestra porque no publica foto o superficie"; debajo, la tira de
+   precios del conjunto entero con la marca "Esta casa", y cinco filas con foto ordenadas por
+   precio, con "Esta casa" intercalada en su lugar (al 04/10: US$ 35.000 · 45.000 · **47.000
+   Esta casa** · 55.000 · 58.000 · 59.000): son las cinco de superficie más parecida, cada una
+   con precio, US$/m² y ficha. Tocar "Ver los 29 similares", dejar que se vean las 29 filas y
+   volver con "Ver solo los 5 más parecidos". Se dice: FINDER compara contra 30 avisos, y
+   muestra primero los cinco más parecidos. Subir despacio: la galería (22
    fotos), "Lectura de FINDER" con la señal "Precio 33 % más bajo que avisos similares de la
    zona", el puntaje 91 de 100 explicado por componente, los semáforos con sus motivos, el
    bloque Zona y el aviso de estimación. Después "Indicadores de mercado" ("Posición entre
@@ -171,7 +178,9 @@ Se hace la misma mañana, en este orden. Si un punto falla, no se graba hasta re
   ```
 
   Imprime el top 20 con tendencia, posición, Zona y chips, marca con `[DATOS INCOMPLETOS]`
-  las cards sin mapa, y termina en "GATE OK: se puede grabar" o "GATE FALLA". Se pueden pasar
+  las cards sin mapa, abre el detalle de la primera card completa (hasta 5 similares con la
+  foto cargada, "Esta casa" intercalada, la tira de precios, mapa y Consultar) y termina en
+  "GATE OK: se puede grabar" o "GATE FALLA". Se pueden pasar
   varias consultas en el mismo comando; entre una y otra espera 6 segundos por el límite de P2.
 - [ ] **Elegir las cards del guion con el top 20 impreso:** cuál es la #1 (plano del detalle:
   tiene que ser una sin la marca de datos incompletos), dónde está la flecha "En baja" y dónde
