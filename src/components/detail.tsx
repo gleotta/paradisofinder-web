@@ -249,6 +249,8 @@ export interface SimilarRow {
   sqm: string | null;
   meta: string;
   thumb: string | null;
+  /** Miniatura propia (`/og/propiedad/<id>.t.jpg`), por si la foto del portal no carga. */
+  thumbFallback?: string | null;
   /** Posición en la tira de precios (0-100) o null sin precio en dólares. */
   x: number | null;
 }
@@ -259,9 +261,16 @@ export interface SimilarRow {
  * muestra las 5 de superficie más parecida, por precio, con la propiedad
  * intercalada en su lugar ("Esta casa"), y una tira con TODOS los precios
  * del conjunto. "Ver los N similares" despliega el resto en las mismas
- * filas. Las miniaturas salen de `/og/propiedad/<id>.t.jpg` hasta que P2
- * mande `photo_url` en cada similar.
+ * filas. La miniatura es la `photo_url` del similar (P2 04/10); si el portal
+ * no la sirve, se prueba una vez con la propia (`/og/propiedad/<id>.t.jpg`).
  */
+/** La foto del similar no cargó: se prueba una vez con la miniatura propia; si tampoco, queda el fondo. */
+function thumbFailed(img: HTMLImageElement) {
+  const fallback = img.dataset.fallbackSrc;
+  if (fallback && img.getAttribute("src") !== fallback) img.src = fallback;
+  else img.style.visibility = "hidden";
+}
+
 export function SimilarsSection({
   shown,
   all,
@@ -281,6 +290,13 @@ export function SimilarsSection({
 }) {
   const [open, setOpen] = useState(false);
   const [hover, setHover] = useState<string | null>(null);
+  const list = useRef<HTMLUListElement>(null);
+  // Una foto que falla antes de la hidratación no dispara `onError`: se revisa al montar y al desplegar.
+  useEffect(() => {
+    list.current?.querySelectorAll<HTMLImageElement>("img.simrow-thumb").forEach((img) => {
+      if (img.complete && img.naturalWidth === 0) thumbFailed(img);
+    });
+  }, [open]);
   const rows = open ? all : shown;
   const rest = all.length - shown.length;
   const self = all.find((r) => r.self) ?? null;
@@ -329,14 +345,23 @@ export function SimilarsSection({
         </div>
       )}
 
-      <ul className="simrows">
+      <ul className="simrows" ref={list}>
         {rows.map((r, i) => {
           const body = (
             <>
               {r.thumb ? (
                 // Fotos de portales arbitrarios / miniatura propia: <img> plano; si falla, queda el fondo.
                 // eslint-disable-next-line @next/next/no-img-element
-                <img className="simrow-thumb" src={r.thumb} alt="" loading="lazy" width={88} height={66} onError={(e) => (e.currentTarget.style.visibility = "hidden")} />
+                <img
+                  className="simrow-thumb"
+                  src={r.thumb}
+                  alt=""
+                  loading="lazy"
+                  width={88}
+                  height={66}
+                  data-fallback-src={r.thumbFallback ?? undefined}
+                  onError={(e) => thumbFailed(e.currentTarget)}
+                />
               ) : (
                 <span className="simrow-thumb" aria-hidden />
               )}

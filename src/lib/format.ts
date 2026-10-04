@@ -85,13 +85,19 @@ export function secondaryPrice(
   return null;
 }
 
+/** Rótulo corto del m² medido sobre la superficie total (el aviso no publica la cubierta). */
+const TOTAL_BASIS_SUFFIX = " total";
+
 /**
  * Precio por m²: en VENTAS de vivienda, `price_per_sqm` (sobre cubierta);
  * en lotes, `price_per_sqm_land` (sobre superficie total) y, si es rural,
- * `price_per_hectare`.
+ * `price_per_hectare`. Un departamento medido sobre la total
+ * (`total_area_basis`, P2 04/10) lleva el m² rotulado: "/m² total" en la
+ * card, "sobre superficie total" en el detalle (`long`).
  */
 export function pricePerSqm(
-  card: Pick<Card, "operation" | "price_per_sqm" | "property_type" | "price_per_sqm_land" | "price_per_hectare">,
+  card: Pick<Card, "operation" | "price_per_sqm" | "property_type" | "price_per_sqm_land" | "price_per_hectare" | "total_area_basis">,
+  { long = false }: { long?: boolean } = {},
 ): string | null {
   if (card.property_type === "land") {
     if (card.price_per_hectare != null) return `US$ ${nf.format(card.price_per_hectare)}/ha`;
@@ -103,7 +109,8 @@ export function pricePerSqm(
     return null;
   }
   if (card.operation !== "sale" || card.price_per_sqm == null) return null;
-  return `US$ ${nf.format(card.price_per_sqm)}/m²`;
+  const basis = card.total_area_basis === true ? (long ? " sobre superficie total" : TOTAL_BASIS_SUFFIX) : "";
+  return `US$ ${nf.format(card.price_per_sqm)}/m²${basis}`;
 }
 
 export function miniCardPrice(mc: MiniCard): { main: string; secondary: string | null } {
@@ -315,6 +322,7 @@ export function positionInfo(
     | "property_type"
     | "land_class"
     | "land_services"
+    | "comparables_by_area_only"
   >,
 ): PositionInfo | null {
   const gap = card.valuation_gap_pct;
@@ -331,7 +339,7 @@ export function positionInfo(
   else if (Math.abs(gap) < 10) head = `${side} · en línea con la zona`;
   else head = `${side} de similares`;
 
-  const unit = positionUnit(card);
+  const unit = poolUnit(card);
   const where = poolWhere(card);
   const sub =
     card.comparables_count != null
@@ -355,17 +363,33 @@ export function positionInfo(
  * NO en casas en venta ni en lotes, donde manda la banda de superficie
  * (`_select_comparables` de P3; verificado el 03/10: entre las 30 casas
  * similares de una casa de 3 dormitorios hay casas de 1 y 2). Decir
- * ", 3 dorm." ahí sería falso.
+ * ", 3 dorm." ahí sería falso. Tampoco cuando el aviso no publica
+ * dormitorios y el conjunto se armó por superficie sola
+ * (`comparables_by_area_only`, P2 04/10): ahí hay de todos.
  */
-function poolByBedrooms(card: Pick<Card, "operation" | "property_type">): boolean {
+function poolByBedrooms(card: Pick<Card, "operation" | "property_type" | "comparables_by_area_only">): boolean {
   if (card.property_type === "land" || card.property_type === "room") return false;
+  if (card.comparables_by_area_only === true) return false;
   return card.operation === "rent" || card.property_type === "apartment";
 }
 
 /** "en Rawson" · "en Capital, 2 dorm." (los dormitorios solo cuando el conjunto los exige). */
-function poolWhere(card: Pick<Card, "zone" | "bedrooms" | "operation" | "property_type">): string {
+function poolWhere(card: Pick<Card, "zone" | "bedrooms" | "operation" | "property_type" | "comparables_by_area_only">): string {
   const dorm = poolByBedrooms(card) && card.bedrooms ? `, ${card.bedrooms} dorm.` : "";
   return `en ${zoneName(card.zone)}${dorm}`;
+}
+
+/**
+ * "departamentos" · "departamentos de superficie similar" cuando el conjunto
+ * se armó por superficie sola (`comparables_by_area_only`): es lo que P2/P3
+ * sugieren decir ("avisos similares en superficie"), con la unidad de la card.
+ */
+function poolUnit(
+  card: Pick<Card, "operation" | "property_type" | "land_class" | "land_services" | "comparables_by_area_only">,
+): string {
+  const unit = positionUnit(card);
+  if (card.comparables_by_area_only !== true) return unit;
+  return `${unit === POSITION_UNIT.other ? "avisos" : unit} de superficie similar`;
 }
 
 /** Motivos de P2/P3 que explican por qué un aviso no tiene comparación de precio. */
@@ -396,9 +420,9 @@ export function positionPhrase(card: Parameters<typeof positionInfo>[0]): string
 /**
  * Ficha de un comparable del detalle: "Casa · 3 dorm. · 80 m² cub. · US$ 375/m²".
  * `price_per_sqm` ya viene de P2 sobre la base con que se compara (cubierta en
- * vivienda, total en lotes). La zona solo si no es la del aviso: el conjunto
- * puede ampliarse a zonas vecinas (`comparables_pool.scope`). null = no
- * informado → se omite (nunca "0 m²").
+ * vivienda — la total en un departamento sin cubierta —, total en lotes). La
+ * zona solo si no es la del aviso: el conjunto puede ampliarse a zonas vecinas
+ * (`comparables_pool.scope`). null = no informado → se omite (nunca "0 m²").
  */
 export function miniCardMeta(mc: MiniCard, propertyZone: string | null, { withSqm = true }: { withSqm?: boolean } = {}): string {
   const parts: string[] = [];
@@ -425,15 +449,27 @@ export function miniCardMeta(mc: MiniCard, propertyZone: string | null, { withSq
   return parts.join(" · ");
 }
 
-/** "US$ 375/m²" del similar (base de P2: cubierta en vivienda, total en lotes); null sin dato. */
-export function miniCardSqm(mc: Pick<MiniCard, "price_per_sqm">): string | null {
+/**
+ * "US$ 375/m²" del similar (base de P2: cubierta en vivienda, total en lotes);
+ * null sin dato. En vivienda, un similar sin cubierta y con total se midió
+ * sobre la total (contrato 04/10 §4.7): se rotula igual que en la card, para
+ * no mezclar en la lista dos m² distintos sin decirlo.
+ */
+export function miniCardSqm(
+  mc: Pick<MiniCard, "price_per_sqm"> & Partial<Pick<MiniCard, "property_type" | "covered_area_sqm" | "area_sqm">>,
+): string | null {
   if (mc.price_per_sqm == null || !Number.isFinite(mc.price_per_sqm)) return null;
-  return `US$ ${(mc.price_per_sqm >= 10 ? nf : nf1).format(mc.price_per_sqm)}/m²`;
+  const totalBasis = mc.property_type !== "land" && !hasArea(mc.covered_area_sqm) && hasArea(mc.area_sqm);
+  return `US$ ${(mc.price_per_sqm >= 10 ? nf : nf1).format(mc.price_per_sqm)}/m²${totalBasis ? TOTAL_BASIS_SUFFIX : ""}`;
 }
 
 export interface ComparablesPoolInfo {
-  /** "Comparado con 80 alquileres similares en Capital, 3 dorm." */
-  summary: string;
+  /**
+   * "Comparado con 80 alquileres similares en Capital, 3 dorm."; null cuando el
+   * aviso no tiene comparación (conjunto de 1 a 4: se lista igual y en su
+   * lugar va el motivo de P2).
+   */
+  summary: string | null;
   /** "30 a la vista · los otros 50 no se muestran porque no publican foto o superficie"; null si se muestran todos. */
   hidden: string | null;
 }
@@ -443,19 +479,38 @@ export interface ComparablesPoolInfo {
  * §3.3.4): el conjunto con el que P3 midió el precio, hasta dónde hubo que
  * ampliar la zona (`scope`) y cuántos del conjunto no se muestran (tier 0:
  * sin foto o sin superficie; en alquiler, casi la mitad). Sin `pool`, nada.
+ *
+ * P2 04/10: "Comparado con…" solo si hubo comparación (`valuation_gap_pct`).
+ * Un conjunto de 1 a 4 se lista igual pero no alcanza para comparar: sin
+ * resumen acá, la cabecera es el motivo de P2 (`positionMissingReason`). Y el
+ * conjunto armado por superficie sola (`comparables_by_area_only`) se dice
+ * así, sin dormitorios: hay de todos.
  */
 export function comparablesPoolInfo(
   pool: ComparablesPool | null | undefined,
-  card: Pick<Card, "zone" | "bedrooms" | "operation" | "property_type" | "land_class" | "land_services">,
+  card: Pick<
+    Card,
+    | "zone"
+    | "bedrooms"
+    | "operation"
+    | "property_type"
+    | "land_class"
+    | "land_services"
+    | "valuation_gap_pct"
+    | "comparables_by_area_only"
+  >,
 ): ComparablesPoolInfo | null {
   if (!pool || !(pool.count > 0)) return null;
+  const byArea = card.comparables_by_area_only === true;
   // "80 alquileres similares" · "30 casas similares" · "4 lotes rurales similares con servicios" (como lo dice P2).
-  const unit = positionUnit(card).replace(/^(lotes rurales)( con servicios)?$/, "$1 similares$2").replace(/^(?!.*similares).*$/, (u) => `${u} similares`);
+  const unit = byArea
+    ? poolUnit(card)
+    : positionUnit(card).replace(/^(lotes rurales)( con servicios)?$/, "$1 similares$2").replace(/^(?!.*similares).*$/, (u) => `${u} similares`);
   const zone = zoneName(card.zone);
-  const dorm = poolByBedrooms(card) && card.bedrooms ? `, ${card.bedrooms} dorm.` : "";
+  const dorm = byArea ? ", con cualquier cantidad de dormitorios" : poolByBedrooms(card) && card.bedrooms ? `, ${card.bedrooms} dorm.` : "";
   const where =
     pool.scope === "adjacent_zones" ? `en ${zone} y zonas vecinas` : pool.scope === "macro_zone" ? `en ${zone} y alrededores` : `en ${zone}`;
-  const summary = `Comparado con ${nf.format(pool.count)} ${unit} ${where}${dorm}`;
+  const summary = card.valuation_gap_pct != null ? `Comparado con ${nf.format(pool.count)} ${unit} ${where}${dorm}` : null;
   const notListed = pool.not_listed > 0 ? pool.not_listed : 0;
   const hidden =
     notListed > 0
@@ -468,8 +523,9 @@ export function comparablesPoolInfo(
  * Cuáles similares van a la vista (decisión de German, 03/10): las N de
  * superficie más parecida a la de la propiedad — el mismo criterio con el
  * que P3 recorta su conjunto a 30 —, mostradas por precio. Base: cubierta en
- * vivienda, total en lotes (la misma con la que P3 compara). Sin superficie
- * en la propiedad, las N de precio más cercano. Empates: precio más cercano
+ * vivienda (la total si el aviso no publica cubierta: es la base con que P3
+ * mide a ese departamento, P2 04/10), total en lotes. Sin superficie en la
+ * propiedad, las N de precio más cercano. Empates: precio más cercano
  * y después el id, así la selección no depende del orden de llegada.
  * `all` queda ordenada por precio en USD (los sin precio al final).
  */

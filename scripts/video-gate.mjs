@@ -113,7 +113,7 @@ for (const [qi, q] of queries.entries()) {
   const nRows = await rows.count();
   if (nRows) {
     await section.scrollIntoViewIfNeeded();
-    // Las miniaturas son lazy y la primera vez se generan en el server (/og/propiedad/<id>.t.jpg).
+    // Las miniaturas son lazy: la foto del similar que manda P2 (04/10) o, de respaldo, la propia (/og/propiedad/<id>.t.jpg).
     await d
       .waitForFunction(
         () => [...document.querySelectorAll('[data-testid="similar-row"] img.simrow-thumb')].every((img) => img.complete),

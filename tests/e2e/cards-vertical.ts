@@ -275,7 +275,12 @@ export function verticalBattery(c: VerticalCase): void {
       expect(shown).toBeLessThanOrEqual(SIMILARS_VISIBLE);
       const pool = section.getByTestId("comparables-pool");
       if (await pool.count()) {
-        expect(await pool.innerText()).toMatch(/^Comparado con \d+ .*similares.* en \S/);
+        // Con comparación: "Comparado con N … similares en Zona" ("de superficie similar" si el
+        // conjunto se armó por superficie sola). Sin ella (conjunto de 1 a 4, P2 04/10): el motivo
+        // de P2 y jamás "Comparado con".
+        const lead = await pool.innerText();
+        if (await link.count()) expect(lead).toMatch(/^Comparado con \d+ .*similar(es)?.* en \S/);
+        else expect(lead).not.toMatch(/^Comparado con/);
       }
       if (shown > 0) {
         await expect(section.getByTestId("similar-self")).toHaveCount(1);
@@ -288,7 +293,8 @@ export function verticalBattery(c: VerticalCase): void {
       }
       for (let i = 0; i < shown; i++) {
         expect(await rows.nth(i).innerText()).not.toMatch(/\b0 m²|\b(None|null|NaN)\b/);
-        await expect(rows.nth(i).locator("img.simrow-thumb")).toHaveAttribute("src", /\/og\/propiedad\/.+\.t\.jpg$/);
+        // La foto del similar llega de P2 (04/10); sin ella, o si el portal no la sirve, la miniatura propia.
+        await expect(rows.nth(i).locator("img.simrow-thumb")).toHaveAttribute("src", /^https?:\/\/\S+$|\/og\/propiedad\/.+\.t\.jpg$/);
       }
       if (!live) {
         await expect(detail.locator(".score-num")).toBeVisible();

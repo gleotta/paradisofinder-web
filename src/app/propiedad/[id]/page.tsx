@@ -36,6 +36,7 @@ import {
   miniCardSqm,
   percentilePhrase,
   pickSimilars,
+  positionMissingReason,
   positionPhrase,
   pricePerSqm,
   priceStrip,
@@ -74,8 +75,14 @@ import { propertyOgImageUrl, propertyShareUrl } from "@/lib/share";
  * 03/10 (German, sobre el mockup aprobado): a la vista van las 5 de superficie
  * más parecida, por precio, con la propiedad intercalada ("Esta casa"), una
  * tira con todos los precios del conjunto y "Ver los N similares" para el
- * resto. Las miniaturas salen de `/og/propiedad/<id>.t.jpg` (P2 no manda la
- * foto del similar; pedida).
+ * resto.
+ *
+ * Respuesta de P2 del 04/10 (`docs/RESPUESTA_P2_A_P1_2026-10-04.md`): la
+ * miniatura de cada similar es su `photo_url` (la propia
+ * `/og/propiedad/<id>.t.jpg` queda de respaldo); el m² de un departamento
+ * medido sobre la total va rotulado; el conjunto armado por superficie sola
+ * se dice así; y un conjunto de 1 a 4 se lista sin "Comparado con": la
+ * cabecera es el motivo de P2.
  */
 
 const load = cache((id: string) => getProperty(id));
@@ -148,12 +155,14 @@ export default async function PropertyPage({
   const estimate = layout === "invertir" ? estimateInfo(p) : null;
   const comparables = data.comparables ?? [];
   const pool = comparablesPoolInfo(data.comparables_pool, p);
+  // Sin comparación (conjunto de 1 a 4), la cabecera es el motivo de P2, tal cual.
+  const poolLead = pool ? [pool.summary ?? positionMissingReason(p), pool.hidden].filter(Boolean).join(" · ") : "";
   const similars = similarRows(p, comparables);
   const scoreComponents = data.score_components ?? p.score_components ?? [];
   const title = `${PROPERTY_TYPE_LABEL[p.property_type] ?? "Propiedad"} en ${zoneName(p.zone)}`;
   const photos = (p.photos?.length ? p.photos : p.photo_url ? [p.photo_url] : []).map(clean).filter((x): x is string => !!x);
   const secondary = secondaryPrice(p);
-  const sqm = pricePerSqm(p);
+  const sqm = pricePerSqm(p, { long: true });
   const address = clean(p.address);
   const marketContext = clean(p.market_context);
   const description = clean(p.description);
@@ -285,10 +294,9 @@ export default async function PropertyPage({
               sección existe siempre, para que el ancla no caiga en el vacío. */}
           <section className="dsection" id="comparables" data-testid="comparables">
             <h2>Avisos similares</h2>
-            {pool && (
+            {poolLead && (
               <p className="section-lead" data-testid="comparables-pool">
-                {pool.summary}
-                {pool.hidden && <> · {pool.hidden}</>}
+                {poolLead}
               </p>
             )}
             {similars.all.length <= 1 ? (
@@ -387,13 +395,18 @@ function similarRows(p: PropertyDetail, comparables: NonNullable<PropertyDetailR
   const toRow = (mc: (typeof comparables)[number]): SimilarRow => {
     const id = clean(mc.id);
     const price = miniCardPrice(mc);
+    // La foto del similar llega de P2 (04/10); la miniatura propia queda de
+    // respaldo: sin `photo_url` (P2 anterior) o si el portal no la sirve.
+    const photo = clean(mc.photo_url);
+    const ownThumb = id ? `/og/propiedad/${encodeURIComponent(id)}.t.jpg` : null;
     return {
       id,
       price: price.main,
       secondary: price.secondary,
       sqm: miniCardSqm(mc),
       meta: miniCardMeta(mc, p.zone, { withSqm: false }),
-      thumb: id ? `/og/propiedad/${encodeURIComponent(id)}.t.jpg` : null,
+      thumb: photo ?? ownThumb,
+      thumbFallback: photo ? ownThumb : null,
       x: strip && mc.price_usd != null ? strip.x(mc.price_usd) : null,
     };
   };
@@ -403,8 +416,15 @@ function similarRows(p: PropertyDetail, comparables: NonNullable<PropertyDetailR
     label: SELF_LABEL[p.property_type] ?? SELF_LABEL_DEFAULT,
     price: mainPrice(p),
     secondary: secondaryPrice(p),
-    // US$/m² sobre la misma base que los similares: cubierta en vivienda (price_per_sqm), total en lotes.
-    sqm: miniCardSqm({ price_per_sqm: p.property_type === "land" ? (p.price_per_sqm_land ?? null) : p.price_per_sqm }),
+    // US$/m² sobre la misma base que los similares: cubierta en vivienda (la total, rotulada, con
+    // `total_area_basis`), total en lotes. En alquiler de vivienda no va: se compara el precio mensual
+    // y los similares llegan sin m².
+    sqm:
+      p.property_type === "land"
+        ? miniCardSqm({ price_per_sqm: p.price_per_sqm_land ?? null, property_type: "land" })
+        : p.operation === "sale"
+          ? miniCardSqm(p)
+          : null,
     meta: miniCardMeta(p, p.zone, { withSqm: false }),
     thumb: clean(p.photo_url) ?? `/og/propiedad/${encodeURIComponent(p.id)}.t.jpg`,
     x: strip && p.price_usd != null ? strip.x(p.price_usd) : null,
@@ -414,12 +434,13 @@ function similarRows(p: PropertyDetail, comparables: NonNullable<PropertyDetailR
     rows.splice(selfIndexByPrice(list, p.price_usd), 0, self);
     return rows;
   };
-  const unit = SELF_LABEL[p.property_type] ? SELF_LABEL[p.property_type]!.split(" ")[1] : "propiedad";
+  // "esta casa" · "este departamento": el artículo sale de la etiqueta, no se asume femenino.
+  const selfLower = self.label!.replace(/^E/, "e");
   const total = all.length;
   const n = shown.length;
   const note =
     n < total
-      ? `A la vista, ${n === 1 ? "la" : "las"} ${n} de superficie más parecida a esta ${unit}; el resto, con "Ver los ${total} similares".`
+      ? `A la vista, ${n === 1 ? "la" : "las"} ${n} de superficie más parecida a ${selfLower}; el resto, con "Ver los ${total} similares".`
       : `A la vista, ${total === 1 ? "el único similar que se puede mostrar" : `los ${total} similares que se pueden mostrar`}, por precio.`;
   return {
     shown: withSelf(shown),
@@ -487,7 +508,9 @@ function indicatorList(p: PropertyDetail): { label: string; value: string }[] {
       label: "Relación alquiler/precio",
       value: new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(p.rent_to_price_ratio),
     });
-  if (p.comparables_count != null) out.push({ label: "Avisos similares comparados", value: fmtInt(p.comparables_count) });
+  // "comparados" solo si hubo comparación: un conjunto de 1 a 4 se lista pero no alcanza (P2 04/10).
+  if (p.comparables_count != null)
+    out.push({ label: p.valuation_gap_pct != null ? "Avisos similares comparados" : "Avisos similares encontrados", value: fmtInt(p.comparables_count) });
   if (p.zone_supply != null) out.push({ label: "Avisos activos en la zona", value: fmtInt(p.zone_supply) });
   return out;
 }

@@ -651,3 +651,116 @@ hasta 100 mil dólares": las 8 comprobaciones pasan; detalle de la #1 (Rawson)
 contra producción con el guion como texto**: queda para cuando P2 y P3
 entreguen sus pedidos; ese día el gate se corre contra
 `https://paradisofinder.com` (handoff §7).
+
+---
+
+## 12. Entrega de P2 del 04/10: similares con foto, Zona sin dormitorios y comparación sin cubierta
+
+P2 respondió el pedido del 03/10 (`docs/RESPUESTA_P2_A_P1_2026-10-04.md`)
+junto con las reglas nuevas de P3 (`docs/RESPUESTA_P3_A_P1_2026-10-03.md`; la
+segunda vuelta de P3 sobre la respuesta de P1 del 30/09 está en
+`docs/RESPUESTA_P3_A_P1_2026-10-04.md`). **Está en el Docker local de P2
+(`localhost:8000`, sobre la corrida de P3 del 03/10); en producción todavía
+no.** Con esto se cierra casi todo lo de §11.3 y §11.4.
+
+### 12.1 Qué llega ahora (medido el 04/10 sobre el Docker local)
+
+Recorriendo `/search/structured` (2.039 avisos de vivienda: todos los
+departamentos, todos los alquileres y 800 casas en venta):
+
+| Qué | Antes | Ahora |
+|---|---|---|
+| Departamentos en venta sin cubierta (`total_area_basis: true`, 177) | sin m² ni comparación, motivo "Sin superficie cubierta…" | m² sobre la total y comparación; 12 quedan sin comparación por tener menos de 5 similares |
+| Alquileres sin cubierta | sin comparación (P2 la ocultaba) | comparación como cualquier otro; 81 alquileres traen `total_area_basis` |
+| Vivienda sin dormitorios (`comparables_by_area_only: true`, 31 ventas y 32 alquileres) | sin comparación y sin Zona | comparada por superficie sola; `zone_ref` con `bucket: "todos"` |
+| Departamentos en venta con `zone_ref` | 89 % en Capital | 707 de 707 |
+| Comparación con 3 o 4 similares | P3 la calculaba, P2 la descartaba | no existe: el mínimo es 5 en los dos |
+| Similares del detalle | sin foto | `photo_url` en todos |
+| Casas en venta sin cubierta | sin comparación | igual (decisión de German del 04/10): es el único caso que conserva "Sin superficie cubierta…" |
+
+Esta semana `zone_ref` llega sin `trend` en las celdas por tipo y de lotes
+(P3 exige ahora 15 avisos y 3 semanas de serie); el bloque Zona sale sin la
+flecha y vuelve solo cuando la serie alcance.
+
+### 12.2 Lo que P1 cambió
+
+| Qué | Dónde |
+|---|---|
+| **m² rotulado** cuando el aviso se midió sobre la total: "US$ 907/m² total" en la card (con `title` que lo explica), "US$ 907/m² sobre superficie total" junto al precio del detalle | `pricePerSqm` (`long` para el detalle) en `src/lib/format.ts`; `PropertyCard.tsx`; `page.tsx` del detalle |
+| El mismo rótulo en la fila de un **similar medido por la total** (`covered_area_sqm` null y `area_sqm` con valor, contrato §4.7) y en la fila propia | `miniCardSqm` |
+| **Conjunto por superficie sola**: "12 departamentos de superficie similar en Capital" en la card; "Comparado con 12 departamentos de superficie similar en Capital, con cualquier cantidad de dormitorios" en el detalle. Sin ", D dorm." | `poolUnit`, `poolByBedrooms`, `comparablesPoolInfo` |
+| **Conjunto de 1 a 4, sin comparación**: la cabecera de "Avisos similares" ya no dice "Comparado con 2…"; va el motivo de P2 tal cual, y el indicador dice "Avisos similares encontrados" | `comparablesPoolInfo` (`summary: null` sin `valuation_gap_pct`), `positionMissingReason`, `indicatorList` |
+| **Miniatura = `photo_url` del similar**, directa. La propia (`/og/propiedad/<id>.t.jpg`) queda de respaldo: sin el campo (P2 de producción hasta su deploy) o si la foto no carga, también cuando falla antes de la hidratación | `similarRows()` en `page.tsx`; `thumbFailed` y `SimilarsSection` en `src/components/detail.tsx` |
+| En **alquiler**, la fila propia de "Avisos similares" no lleva m²: P2 manda `price_per_sqm` en alquileres pero sus similares no, porque se comparan por precio mensual | `similarRows()` |
+| "a esta departamento" → "a este departamento" en la nota de la sección (error del 03/10) | `similarRows()` |
+| Tipos: `total_area_basis`, `comparables_by_area_only`, `MiniCard.photo_url`, `bucket: "todos"` | `src/lib/p2/types.ts` |
+
+Lo que **no** hizo falta tocar: `has_covered_area` nunca se usó para ocultar
+el bloque de posición (sale siempre que llega `valuation_gap_pct`); el
+bloque Zona no muestra el bucket, así que `todos` entra sin texto nuevo; el
+alquiler sin cubierta enciende su bloque solo. Los mocks no se tocaron: son
+solo el fallback de `P2_MODE=auto`.
+
+El cambio es compatible hacia atrás: con el P2 de producción (01/10) los
+campos nuevos no llegan, no aparece ningún rótulo nuevo y la miniatura sale
+de la ruta propia, como hasta hoy. Lo único que cambia sin esperar a P2: la
+cabecera sin "Comparado con" cuando no hay comparación, la fila propia sin
+m² en alquiler y la concordancia de la nota.
+
+### 12.3 Visto con datos reales (Docker local, 380 px)
+
+| Aviso | Qué se ve |
+|---|---|
+| `ac233f21…` departamento en venta, Capital, 54 m² totales | Card "US$ 907/m² total", 26 % por debajo en verde, "30 departamentos en Capital, 1 dorm.". Detalle: "Comparado con 30 departamentos similares en Capital, 1 dorm."; entre los 5 a la vista, dos medidos por la total y rotulados |
+| `aa03382d…` departamento en venta con 2 similares | Card con el motivo "Hay menos de 5 avisos similares en la zona…". Detalle: ese motivo como cabecera, las 2 filas (de Rivadavia), "Avisos similares encontrados: 2" |
+| `b673d948…` departamento en venta sin dormitorios | "12 departamentos de superficie similar en Capital"; Zona "m² US$ 1.090" (celda `todos`) |
+| `55fea243…` alquiler sin dormitorios, Rivadavia | "13 alquileres de superficie similar en Rivadavia"; filas sin m² |
+| `0279f27b…` medido por la total, a verificar | "35 %+ por debajo · verificar el aviso", en neutro |
+
+"departamentos en venta en capital", 70 cards: 23 con el m² sobre la total,
+2 por superficie sola, 2 sin posición (con su motivo), 0 sin Zona. Las
+miniaturas cargan 30 de 30 directas del portal; con las fotos del portal
+bloqueadas en el navegador, 30 de 30 por la ruta propia.
+
+### 12.4 Dos detalles vistos, que NO se mandan a P2 ni a P3
+
+German dio por cerrada la iteración el 04/10: no se abre otra ronda por
+detalles. Quedan acá solo como registro, fuera de la respuesta a P2.
+
+- El alquiler con `bedrooms: 0` (`975d753f…`, un solo aviso) trae `zone_ref`
+  con `todos` pero 0 similares: para la Zona el 0 es "sin dato" y para el
+  conjunto no.
+- El motivo dice "menos de 5 avisos similares en la zona" también cuando la
+  zona ya se amplió (`scope: macro_zone`). P1 lo muestra tal cual.
+
+### 12.5 Resultado de las pruebas (04/10)
+
+`tsc`, `eslint` y `npm run build` limpios. Playwright contra `next start` del
+build final y **P2 real** (Docker local, versión del 04/10):
+
+| Corrida | Resultado |
+|---|---|
+| `cards-{alquilar,comprar,invertir,lotes}.spec.ts`, proyecto `mobile` | 38 pasan · 0 fallan (4,5 min) |
+| `cards-alquilar` y `cards-comprar`, proyecto `desktop` | 20 pasan · 0 fallan |
+
+Una corrida anterior contra `next dev` (cards + `t3-card`, los dos proyectos)
+dio 82 pasan y 2 fallan: las dos, la aserción "alquileres en" de
+`cards-alquilar`, que no conocía "alquileres de superficie similar en"; se
+corrigió la prueba. Prueba nueva en `cards-comprar`: toda card con m² lo trae
+sobre la cubierta ("m² cub." en la ficha) o rotulado "total", y el conjunto
+por superficie sola no dice dormitorios. Los textos de la cabecera y la
+miniatura de la batería aceptan las dos formas (con y sin los campos del
+04/10).
+
+No se probó el camino sin los campos nuevos contra el P2 de producción: la
+miniatura propia sí se ejercitó, bloqueando las fotos del portal en el
+navegador (30 de 30 por la ruta propia).
+
+### 12.6 Pendiente
+
+- P1 a producción: push a `stage` (gate + smoke) y promover. Puede salir
+  antes que P2. El commit en `develop` es del 04/10.
+- Deploy de P2 y sync de P3 a Railway (los decide German).
+- `docs/RESPUESTA_P1_A_P2_2026-10-04.md` es un borrador de cierre, sin
+  pedidos: German decide si se copia al repo de P2 o no se manda.
+- El video contra producción (§11.6) sigue esperando el deploy de P2 y P3.

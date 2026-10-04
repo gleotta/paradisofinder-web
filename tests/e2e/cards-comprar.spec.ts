@@ -49,4 +49,23 @@ test.describe("cards · comprar · propias", () => {
       "por encima · verificar el aviso",
     );
   });
+
+  // P2 04/10 (`docs/RESPUESTA_P2_A_P1_2026-10-04.md`): un departamento que no publica cubierta se
+  // mide sobre la total y su m² va rotulado; sin dormitorios, el conjunto es por superficie sola.
+  test("departamentos: el m² sobre la superficie total va rotulado; por superficie sola, sin dormitorios", async ({ page }) => {
+    const live = (await p2Mode(page)) === "live";
+    await pace(page, live);
+    await search(page, "departamentos en venta en capital", COMPRAR.id);
+    const n = Math.min(await cards(page).count(), 20);
+    for (let i = 0; i < n; i++) {
+      const card = cards(page).nth(i);
+      if ((await card.getAttribute("data-vertical")) !== "comprar") continue;
+      const refs = await card.locator(".pcard-price-refs").innerText();
+      const specs = await card.locator(".pcard-specs").innerText();
+      // Hay m² con cubierta ("m² cub." en la ficha) o, sin ella, sobre la total y dicho.
+      if (refs.includes("/m²")) expect(refs.includes("/m² total"), `card #${i + 1}: "${refs}" con "${specs}"`).toBe(!specs.includes("m² cub."));
+      const sub = card.getByTestId("position").locator(".posblock-sub");
+      if ((await sub.count()) && (await sub.innerText()).includes("de superficie similar")) await expect(sub).not.toContainText("dorm.");
+    }
+  });
 });

@@ -145,7 +145,11 @@ export interface ZoneRef {
   zone: string;
   /** `house` · `apartment` (tipo de la celda) · `land` en lotes · null si la serie zonal todavía no distingue tipo. */
   property_type: PropertyType | null;
-  /** "1" | "2" | "3" | "4plus" | "lote_urbano" | "lote_rural" | "lote_rural_srv". */
+  /**
+   * "1" | "2" | "3" | "4plus" | "lote_urbano" | "lote_rural" | "lote_rural_srv";
+   * "todos" = vivienda que no informa dormitorios, o informa 0 (P2 04/10: antes
+   * llegaba sin `zone_ref`).
+   */
   bucket: string;
   /** Vivienda en venta y lotes urbanos (USD). */
   median_price_per_sqm: number | null;
@@ -188,7 +192,10 @@ export interface Card {
   price_usd: number | null;
   /** Referencia secundaria SOLO en alquileres publicados en USD. */
   price_ars?: number | null;
-  /** Solo en VENTAS. */
+  /**
+   * USD/m² sobre la superficie cubierta; con `total_area_basis`, sobre la
+   * total (P2 04/10: ahí se rotula). La card lo muestra solo en VENTAS.
+   */
   price_per_sqm: number | null;
   /** Estimación de P3 por m² — NO es un precio total. */
   estimated_price_per_sqm?: number | null;
@@ -262,7 +269,25 @@ export interface Card {
    * "verificar el aviso" se decide por `deal_rating`, no por este flag.
    */
   valuation_gap_capped?: boolean | null;
+  /**
+   * Vivienda: el aviso publica superficie cubierta. Con `total_area_basis` es
+   * `false` aunque haya m² y comparación (P2 04/10): NO sirve para decidir si
+   * va el bloque de posición.
+   */
   has_covered_area?: boolean | null;
+  /**
+   * `true` = departamento que no publica cubierta y se midió sobre la total
+   * (`area_sqm`): su m², su conjunto de similares y su entrada al de otros
+   * (P2 04/10 — `docs/RESPUESTA_P2_A_P1_2026-10-04.md`). `true` o null, nunca
+   * `false`.
+   */
+  total_area_basis?: boolean | null;
+  /**
+   * `true` = el aviso no publica dormitorios y su conjunto se armó por
+   * superficie ±30 % sola, con avisos de cualquier cantidad de dormitorios
+   * (P2 04/10). `true` o null, nunca `false`.
+   */
+  comparables_by_area_only?: boolean | null;
   /** Score de P3 (trazabilidad): NO se muestra. */
   p3_opportunity_score?: number | null;
 
@@ -357,8 +382,15 @@ export interface MiniCard {
   operation?: Operation | null;
   bedrooms?: number | null;
   covered_area_sqm?: number | null;
-  /** USD/m² sobre la MISMA base con que se compara: cubierta en vivienda, total en lotes. null sin esa superficie. */
+  /**
+   * USD/m² sobre la MISMA base con que se compara: cubierta en vivienda (la
+   * total en un departamento sin cubierta: `covered_area_sqm` null y
+   * `area_sqm` con valor — P2 04/10), total en lotes. null sin esa superficie
+   * y en alquileres de vivienda, que se comparan por precio mensual.
+   */
   price_per_sqm?: number | null;
+  /** Primera foto del similar, la misma de su card (P2 04/10). Todo similar listado tiene foto. */
+  photo_url?: string | null;
   /** Llega; no se muestra (regla de producto 13 c). */
   opportunity_score?: number | null;
 }

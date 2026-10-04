@@ -165,7 +165,12 @@ function PropertyCardBase({
       <div className="pcard-body">
         <div className="pcard-pricebox">
           <span className="pcard-price">{mainPrice(card)}</span>
-          <span className="pcard-price-refs">{priceRefs || " "}</span>
+          <span
+            className="pcard-price-refs"
+            title={sqm && card.total_area_basis === true ? "Precio por m² sobre la superficie total: el aviso no publica la cubierta" : undefined}
+          >
+            {priceRefs || " "}
+          </span>
         </div>
 
         <h3 className="pcard-title">

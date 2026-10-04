@@ -32,7 +32,8 @@ test.describe("cards · alquilar · propias", () => {
       await expect(card.getByTestId("estimate")).toHaveCount(0);
       expect(await card.innerText()).not.toMatch(/Rentabilidad|Podría alquilarse/);
       const position = card.getByTestId("position");
-      if (await position.count()) await expect(position.locator(".posblock-sub")).toContainText(/alquileres en /);
+      // "de superficie similar": el aviso no publica dormitorios y se comparó por superficie sola (P2 04/10).
+      if (await position.count()) await expect(position.locator(".posblock-sub")).toContainText(/alquileres (de superficie similar )?en /);
     }
     if (live) return;
     const first = page.locator('[data-id="sj-mkr0"]');
