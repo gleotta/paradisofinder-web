@@ -124,6 +124,128 @@ Si se graba en celular, el guion es el mismo con dos diferencias: el mapa se abr
 "Ver mapa" y se vuelve con "Ver lista", y el detalle abre en una pestaña nueva igual, con el
 link "Nueva búsqueda" arriba.
 
+### 4.1 Toma automática del 04/10, con el guion como texto
+
+Grabada el 04/10 contra producción (P1 `423c1f0`, gate en verde) en un iPhone emulado de
+390 × 844: 100 segundos, sin voz, con el guion como texto arriba de la pantalla. El archivo
+queda en `.ci/video/finder-demo-2026-10-04.mp4` (fuera de git) y en el doc de Claude del
+handoff. El texto cambia con cada plano y los valores se leen de la pantalla al grabar, así
+que siempre dice lo que se ve. Guion de esta toma:
+
+| Tiempo | Plano | Texto en pantalla |
+|---|---|---|
+| 0:00 | Home | Escribís lo que buscás, como lo dirías. |
+| 0:10 | Resultados | FINDER entendió el pedido: compra, casa, hasta US$ 100.000. Y encontró 820. |
+| 0:16 | Card #1 | Cada casa viene con su comparación: esta se ofrece 35 % por debajo de 30 casas similares de Capital. |
+| 0:23 | Card #1 | Al lado, la referencia de la zona: el m² en Capital. Y un dato para negociar: lleva 3 meses publicada. |
+| 0:29 | Card #1 | Un toque en “ver similares” abre la comparación. |
+| 0:33 | Avisos similares | Estos son los avisos con los que se comparó. Primero, los cinco de superficie más parecida, con su foto. |
+| 0:39 | Avisos similares | Esta casa va intercalada según su precio, y arriba se ve dónde queda entre los 30. |
+| 0:45 | Avisos similares | Con un toque, se ven los 30. |
+| 0:50 | Lectura de FINDER | Más arriba, la lectura de FINDER: cada señal viene con su explicación. |
+| 0:58 | Ubicación | Abajo, la ubicación que publicó el aviso. |
+| 1:04 | Consultar | Y en un toque, la consulta por WhatsApp a quien vende, con el mensaje ya escrito. |
+| 1:11 | Lista, card #27 | En la lista, solo se pinta de verde lo que le sirve al que compra. Como esta baja de precio: 25 % menos. |
+| 1:21 | Mapa | Y todo en el mapa: 612 de las 820 publican su ubicación. |
+| 1:29 | Cierre | Valores estimados a partir de avisos publicados, no de operaciones concretadas. Son orientativos. |
+| 1:36 | Cierre | paradisofinder.com · San Juan · versión beta |
+
+Diferencias con el guion de arriba: la #1 de ese día es una casa en Capital a $ 75.000.000;
+la flecha "En baja" se muestra en la #27 (25 %, datos completos) porque la #11 es un aviso de
+datos incompletos; ninguna Zona trae tendencia; "ver similares" abre en pestaña nueva y entra
+con un corte; "Consultar" se toca y la pestaña de WhatsApp no se muestra.
+
+Tres textos del producto que se ven en la toma y conviene conocer: el chip "Orden:
+Opportunity Score" y el resumen con "score 91" en el plano de resultados (textos de P2), y la
+señal del detalle que dice "34 %" donde la card dice "35 %" (el valor es 34,5).
+
+Cómo se repite, desde el repo de P1 (el gate primero, un minuto de espera por el límite de
+búsquedas, y después la toma y la composición):
+
+```bash
+node scripts/video-gate.mjs https://paradisofinder.com "casas en venta hasta 100 mil dólares"
+node scripts/video/record.mjs https://paradisofinder.com "casas en venta hasta 100 mil dólares" .ci/video/toma
+node scripts/video/compose.mjs .ci/video/toma .ci/video/finder-demo.mp4
+```
+
+`record.mjs` recorre el flujo real con el Chrome del sistema sin tocar la página: captura la
+pantalla a 780 × 1688 y anota los tiempos de cada texto y de cada toque. Si la #1 no trae el
+bloque de posición o es un aviso de datos incompletos, corta con un error en lugar de grabar
+algo que el texto no puede describir. `compose.mjs` arma el mp4 de 1080 × 1920 (pantalla
+abajo, texto arriba, un círculo en cada toque) y necesita ffmpeg: `npm i --no-save
+ffmpeg-static` o `brew install ffmpeg`. Para cambiar un texto del guion se edita `record.mjs`
+(las llamadas a `cap(...)`) y se graba de nuevo.
+
+### 4.2 Versión para Instagram: 42 segundos, con gancho, desarrollo y cierre
+
+German pidió el 04/10 una versión de 40 a 45 segundos optimizada para Instagram. Es la que va
+a Reels; la de 100 segundos (4.1) queda como demo completa. Grabada el 04/10 contra
+producción: 42,5 segundos, 1080 × 1920, H.264 con una pista de audio en silencio. Archivo:
+`.ci/video/finder-reel-2026-10-04.mp4` (fuera de git) y en el doc de Claude del handoff.
+
+| Tramo | Tiempo | Texto en pantalla | Qué se ve |
+|---|---|---|---|
+| Gancho | 0:00 | ¿Esa casa está cara o barata? | La foto, el precio y el título de la #1 |
+| Gancho | 0:03 | 35 % por debajo de 30 similares | El precio con el bloque verde debajo |
+| Desarrollo | 0:07 | Buscás como hablás, sin filtros | La home, la consulta que se escribe y el toque en Buscar |
+| Desarrollo | 0:13 | Entiende el pedido: 820 casas | El contador y los chips de "Entendí" |
+| Desarrollo | 0:17 | Cada comparación se puede abrir | El toque en "ver similares" |
+| Desarrollo | 0:19 | Los avisos comparados, con su foto | "Avisos similares": la tira y las filas con foto |
+| Desarrollo | 0:23 | Y esta casa, entre los 30 | La fila "Esta casa" y su marca en la tira |
+| Desarrollo | 0:27 | Un toque y le escribís a quien vende | El botón Consultar y el toque |
+| Cierre | 0:33 | Valores estimados a partir de avisos publicados, no de operaciones concretadas. Son orientativos. | La card con su aviso de estimación |
+| Cierre | 0:38 | Buscá la tuya en paradisofinder.com · San Juan · versión beta | La home |
+
+Decisiones de formato, y por qué:
+
+- **La pantalla de la aplicación se ve completa.** Es la de un celular entero (390 × 844),
+  con sus cuatro esquinas, de 690 px de ancho y con 30 px de margen abajo. German lo pidió
+  dos veces el 04/10: la primera versión la cortaba contra el borde de abajo, y la segunda
+  dibujaba el marco entero pero adentro mostraba solo 650 px de alto. Regla: nunca una
+  pantalla recortada, ni por fuera ni por dentro.
+- **La cabecera es compacta.** Ocupa 396 px: la marca "paradisofinder.com" arriba y, pegado
+  a la pantalla, el texto del guion en UNA línea. En las versiones anteriores ocupaba 620
+  px, un tercio del cuadro.
+- **El texto es de una línea, y va en la zona segura de Instagram.** Para que la pantalla
+  entre completa cada texto tiene 36 caracteres como mucho, todos con el mismo cuerpo (51
+  px, Georgia en negrita, la idea clave en rosa). Queda entre los 290 y los 360 px de alto:
+  debajo de la barra de Reels (unos 270 px), lejos de los 420 px de abajo donde Instagram
+  pone el usuario, el texto del posteo y el audio, y dentro del recorte 4:5 con que el reel
+  aparece en el feed (de 285 a 1635 px). La marca ocupa la franja de más arriba, que
+  Instagram tapa o recorta: no hace falta leerla. El aviso de estimación, que va con su
+  texto exacto, es el único de dos líneas, en letra más chica.
+- **Lo importante de cada plano va en los dos tercios de arriba de la pantalla**, que
+  Instagram no tapa: el precio y el bloque verde, la consulta que se escribe, la fila "Esta
+  casa", el botón Consultar.
+- **El gancho es el resultado, no la home.** El primer cuadro ya trae la pregunta sobre la
+  foto y el precio, y a los 3 segundos la respuesta sobre el bloque verde. Ese primer cuadro
+  sirve de tapa. Se graba con una búsqueda hecha fuera de cámara; después hay un corte a la
+  home para mostrar cómo se llega.
+- **Cortes en lugar de recorridos.** Entre la card, la home, el detalle y el cierre hay
+  cortes; los textos se funden uno en otro sin franja vacía.
+- **No se muestra la foto del aviso siguiente entera.** La #2 de ese día era un volante con
+  teléfonos particulares: los planos de la card se encuadran con el precio arriba para que
+  de esa foto se vea solo el borde.
+- **Sin música.** La pista va en silencio: la música se elige en Instagram al publicar.
+
+Quedó afuera respecto de la demo: "Ver los 30 similares", la lectura de FINDER, la ubicación,
+la baja de precio en verde y el mapa.
+
+Se ve en la toma y conviene saberlo: el chip "Orden: Opportunity Score" unos 4 segundos en el
+plano de resultados; el teléfono de la inmobiliaria debajo del botón Consultar; y, al buscar
+desde la home, un "Cargando…" con el pie de página durante 0,2 segundos antes del esqueleto.
+
+```bash
+node scripts/video-gate.mjs https://paradisofinder.com "casas en venta hasta 100 mil dólares"
+node scripts/video/record-reel.mjs https://paradisofinder.com "casas en venta hasta 100 mil dólares" .ci/video/reel
+node scripts/video/compose.mjs .ci/video/reel .ci/video/finder-reel.mp4
+```
+
+Los dos grabadores comparten el motor (`scripts/video/lib.mjs`). Antes de entrar al detalle
+esperan, fuera de cámara, a que carguen las miniaturas de los similares: vienen del portal de
+origen, alguna pesa más de 600 KB, y si una no llega en 45 segundos la toma se corta en vez
+de grabar una foto a medio cargar. La toma del reel hace dos búsquedas.
+
 ## 5. Qué no mostrar y por qué
 
 | No mostrar | Por qué | Hasta cuándo |
