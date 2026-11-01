@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { cards, p2Mode, search } from "./helpers";
+import { cards, noHorizontalScroll, p2Mode, search } from "./helpers";
 import { pace, verticalBattery, type VerticalCase } from "./cards-vertical";
 
 /**
@@ -21,6 +21,22 @@ const LOTES: VerticalCase = {
 verticalBattery(LOTES);
 
 test.describe("cards · lotes · propias", () => {
+  // 01/11: al cambiar de vertical con resultados en pantalla, el host del mapa conserva las clases
+  // de Leaflet (React no vuelve a escribir su `className`); antes perdía `leaflet-container` y las
+  // teselas y marcadores desbordaban la página en escritorio (scroll horizontal permanente).
+  test("cambiar a Lotes con resultados en pantalla no desborda la página (mapa)", async ({ page }) => {
+    const live = (await p2Mode(page)) === "live";
+    await pace(page, live);
+    await search(page, "casas en venta en capital", "comprar");
+    await pace(page, live);
+    await page.getByRole("button", { name: "Lotes", exact: true }).first().click();
+    await expect(cards(page).first()).toHaveAttribute("data-vertical", "lotes", { timeout: 45_000 });
+    await page.waitForTimeout(3000);
+    await noHorizontalScroll(page);
+    const host = page.locator(".leaflet-host");
+    if (await host.isVisible()) await expect(host).toHaveClass(/leaflet-container/);
+  });
+
   test("sello de clase, precio por m² o por hectárea, servicios solo si el aviso los declara", async ({ page }) => {
     const live = (await p2Mode(page)) === "live";
     await pace(page, live);
@@ -52,7 +68,8 @@ test.describe("cards · lotes · propias", () => {
     await expect(rural.getByTestId("land-class")).toHaveText("Lote rural");
     await expect(rural.locator(".pcard-price-refs")).toHaveText("US$ 5.932/ha");
     await expect(rural.getByTestId("position").locator(".posblock-sub")).toContainText("30 lotes rurales con servicios en Pocito");
-    await expect(rural.getByTestId("zone-ref").locator(".zoneblock-value")).toHaveText("ha US$ 30.000 (zona ampliada)");
+    // La hectárea de la zona no se muestra (31/10): sin referencia de precio, el lote rural no lleva bloque Zona.
+    await expect(rural.getByTestId("zone-ref")).toHaveCount(0);
     // `land_services: false` (declara que NO) y `null` (no lo dice): ningún chip de servicios.
     for (const id of ["sj-mkl4", "sj-mkl5"]) {
       await expect(page.locator(`[data-id="${id}"]`)).toBeVisible();

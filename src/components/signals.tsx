@@ -123,8 +123,12 @@ export function PositionBlock({
   );
 }
 
-/** Bloque Zona: valores de la zona, sin porcentaje contra el aviso; verde solo si la zona sube. */
-export function ZoneBlock({ info }: { info: ZoneRefInfo }) {
+/**
+ * Bloque Zona: la referencia de precio (`price_ref`) diciendo de dónde sale, y
+ * la tendencia de la zona; sin porcentaje contra el aviso; verde solo si la
+ * zona sube. `full` (detalle) agrega la base del valor (muestra, dormitorios).
+ */
+export function ZoneBlock({ info, full = false }: { info: ZoneRefInfo; full?: boolean }) {
   return (
     <div
       className={`zoneblock${info.green ? " zoneblock--green" : ""}`}
@@ -136,9 +140,16 @@ export function ZoneBlock({ info }: { info: ZoneRefInfo }) {
         {info.value && (
           <span className="zoneblock-value">
             {info.value}
-            {info.widened && <small> (zona ampliada)</small>}
+            {/* El espacio va como nodo de texto propio: dentro del <small> (inline-block) se colapsa. */}
+            {info.where && (
+              <>
+                {" "}
+                <small>{info.where}</small>
+              </>
+            )}
           </span>
         )}
+        {full && info.basis && <span className="zoneblock-basis">{info.basis}</span>}
         {info.yieldLine && <span className="zoneblock-yield">{info.yieldLine}</span>}
       </div>
       {info.trend && (

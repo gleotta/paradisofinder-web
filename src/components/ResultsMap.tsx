@@ -245,9 +245,13 @@ export default function ResultsMap({ pins, selectedId, onSelect, searchId, layer
   }, [mapEpoch, selectedId, pins]);
 
   return (
+    // `className` FIJO: Leaflet agrega sus clases (`leaflet-container`, con el
+    // `overflow: hidden`) a este mismo elemento, y si React lo vuelve a escribir
+    // al cambiar la capa (Comprar → Lotes) se las borra: teselas y marcadores
+    // desbordaban la página en escritorio (visto el 01/11). La capa va en `data-layer`.
     <div
       ref={divRef}
-      className={`leaflet-host${layer === "land" ? " leaflet-host--land" : ""}`}
+      className="leaflet-host"
       role="region"
       aria-label={layer === "land" ? "Mapa de lotes" : "Mapa de resultados"}
       data-layer={layer}

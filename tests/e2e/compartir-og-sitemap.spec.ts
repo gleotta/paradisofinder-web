@@ -75,4 +75,15 @@ test.describe("Compartir, og:image y sitemap de propiedades", () => {
       expect(res.status(), e.loc).toBe(200);
     }
   });
+
+  // 01/11: los ids de P2 son UUID y a cualquier otra cosa P2 responde 500; en `live`, P1 lo
+  // resuelve como "no existe" (404) sin llamar a P2 — antes era una página de error 500.
+  test("un id que no es de P2 da 404, no 500", async ({ request }) => {
+    const health = (await (await request.get("/api/health")).json()) as { p2_mode?: string };
+    test.skip(health.p2_mode !== "live", "solo contra P2 real");
+    for (const id of ["no-existe", "sj-mks0", "00000000-0000-0000-0000-000000000000"]) {
+      const res = await request.get(`/propiedad/${id}`, { maxRedirects: 0 });
+      expect(res.status(), id).toBe(404);
+    }
+  });
 });

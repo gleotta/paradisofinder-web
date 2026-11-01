@@ -139,6 +139,11 @@ export type ZoneTrend = "up" | "down" | "flat";
  * lotes rurales, m² en el resto) y propia o fallback se decide sobre ESE
  * valor; sin mezclar con la celda `todos`; habitaciones y tarifas por día o
  * semana → null.
+ *
+ * ⚠️ 31/10 (contrato §4.8): sus medianas (`median_price_per_sqm`,
+ * `median_price_per_hectare`, `median_price`) siguen llegando pero YA NO SE
+ * MUESTRAN — la referencia de precio es `price_ref`, ni al lado ni de
+ * respaldo. De acá siguen saliendo tendencia, rentabilidad y semana.
  */
 export interface ZoneRef {
   /** Código ("santa_lucia"). */
@@ -171,6 +176,35 @@ export interface ZoneRef {
   cap_pct: number | null;
   /** Lunes ISO de la celda. */
   week: string;
+}
+
+/**
+ * LA referencia de precio del aviso (contrato §4.8 del 31/10; columnas `ref_*`
+ * de la migración 040 de P3, `docs/RESPUESTA_P3_A_P1_2026-10-31_indicadores-por-radio.md`).
+ * Un solo valor, elegido por P3 con su cascada por vertical entre lo que rodea
+ * al aviso (radio 1 de 1 km; en lotes urbanos también el radio 2 de 3 o 5 km)
+ * y su zona: venta de vivienda r1 → zona; alquiler r1 solo con el tramo propio
+ * → zona; lote urbano r1 → r2 → zona; lote rural zona. P2 no elige, P1 tampoco.
+ * Reemplaza a la mediana de `zone_ref` en la card y el detalle: sin
+ * `price_ref` no hay referencia de precio (jamás `zone_ref` de respaldo).
+ * USD, como `zone_ref`. En los niveles de zona el valor es exactamente el de
+ * `zone_ref` del mismo aviso.
+ */
+export interface PriceRef {
+  /** `radius` = avisos alrededor (ver `radius_km`) · `zona` · `macro_zona` · `provincia` (vocabulario de `zone_ref.fallback`). */
+  level: string;
+  /** Con `radius`: 1 (radio 1) · 3 o 5 (radio 2, solo lotes urbanos). null en los niveles de zona. */
+  radius_km: number | null;
+  /** Con los niveles de zona: `capital`, `gran_san_juan` / `periferia` / `alejado`, `san_juan`. null con `radius`. */
+  place: string | null;
+  /** El valor, en USD, por `unit`. */
+  value: number;
+  /** `sqm` (venta de vivienda y lotes urbanos) · `month` (alquiler mensual) · `hectare` (lotes rurales). */
+  unit: string;
+  /** Avisos que respaldan el valor. */
+  sample: number | null;
+  /** `1` · `2` · `3` · `4plus` · `todos` (sin distinguir dormitorios) · `lote_urbano` · `lote_rural` · `lote_rural_srv`. */
+  bucket: string | null;
 }
 
 /** Card de resultado — shape §5 de la spec. null = no informado → omitir (nunca 0). */
@@ -302,10 +336,12 @@ export interface Card {
   /** Fecha ISO del cambio. */
   price_changed_at?: string | null;
   zone_ref?: ZoneRef | null;
+  /** LA referencia de precio (31/10): la única que se muestra. null = sin referencia, sin caer a `zone_ref`. */
+  price_ref?: PriceRef | null;
   /**
    * Lotes (contrato 13/09 §4.4): la celda zonal que P2 usó para el gap del
-   * lote. YA llega; mientras `zone_ref` no exista, el bloque Zona de Lotes
-   * sale de acá (sin tendencia).
+   * lote. Sirvió de respaldo del bloque Zona hasta el 31/10; desde entonces
+   * la referencia es `price_ref` y esta celda no se muestra.
    */
   zone_stats_ref?: ZoneStatsRef | null;
   /** Alquiler: renta estimada en pesos (P2 convierte con la tasa de la corrida). Solo detalle. */

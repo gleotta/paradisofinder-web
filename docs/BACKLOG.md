@@ -168,9 +168,38 @@ rentabilidad promedio) calculados con lo que hay alrededor, en un radio de
   (`comparables_pool.scope`). La card y el detalle dirían el radio usado.
 - Es la misma geometría que B11 (buscar cerca de un lugar).
 
-**Para retomar:** después de la Fase 2 del plan (no tocar el pool dos veces)
-y con una decisión sobre el radio y sobre qué pasa en las zonas alejadas,
-donde 5 km pueden no juntar 5 comparables.
+**Decidido el 31/10 (German), solo la parte de indicadores.** Dos radios:
+**1 km** para todos y **3 km** en zonas urbanas (`macro_zona =
+gran_san_juan`) / **5 km** en rurales (`periferia`, `alejado`); mínimo 10;
+vecinos solo con confianza alta o media; sin fallback entre radios (más allá
+del radio 2 sigue la zona). La medición que lo respalda (a 5 km desde Capital
+entra el 64 % de la provincia: ya no es una vecina) y el pedido a P3 —
+columnas `r1_*`/`r2_*` en `master.properties` y corrida completa — están en
+`docs/PEDIDO_P1_A_P3_2026-10-31_indicadores-por-radio.md` (copiado al repo de
+P3).
+
+**Entregado por P3 el 31/10**
+(`docs/RESPUESTA_P3_A_P1_2026-10-31_indicadores-por-radio.md`): migración 040,
+script aparte por provincia (`radio_computed_at`), cobertura medida, y el
+agregado que decidió German ese día: **un valor representativo por aviso
+(`ref_*`)**, elegido por P3 con una cascada por vertical (venta r1 → zona;
+alquiler r1 solo en su tramo → zona; lote urbano r1 → r2 → zona; lote rural
+zona). P2 lo sirve como **`price_ref`** (contrato §4.8,
+`docs/PROMPT_P3_A_P2_2026-10-31_price-ref.md`) y **reemplaza a la mediana de
+`zone_ref`** como referencia de precio: un solo número, diciendo de dónde
+sale; sin `price_ref`, sin referencia (nunca `zone_ref` de respaldo). P1 lo
+muestra desde el 01/11 (guía §13). Las tres preguntas abiertas de P3 las
+resolvió P1 sin pedirle nada (guía §13.3): hectárea rural oculta, radios
+rurales con la zona, `is_shared_or_partial` anotado abajo. **A P3 no se le
+contesta: la entrega está cerrada (German, 01/11).** En producción falta el
+sync de P3 y el deploy de P2; P1 sale después de los dos.
+
+**Pendiente anotado (no es pedido):** excluir `is_shared_or_partial` de la
+serie zonal (`zone_stats`), que hoy los cuenta (17 avisos con coordenadas);
+va con la próxima vez que P3 toque `zone_stats` (respuesta C3).
+
+**Para retomar (comparables por radio):** después de la Fase 2 del plan (no
+tocar el pool dos veces); el gap sigue por zona.
 
 ---
 

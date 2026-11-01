@@ -40,6 +40,7 @@ import type {
   MapSearchRequest,
   MapSearchResponse,
   MiniCard,
+  PriceRef,
   PropertyDetail,
   PropertyDetailResponse,
   RatingColor,
@@ -428,6 +429,11 @@ function zoneRef(cell: Partial<ZoneRef> & Pick<ZoneRef, "zone" | "bucket">): Zon
   };
 }
 
+/** `price_ref` de un caso fijo (contrato §4.8, 31/10). */
+function priceRef(ref: Partial<PriceRef> & Pick<PriceRef, "level" | "value" | "unit">): PriceRef {
+  return { radius_km: null, place: null, sample: 30, bucket: null, ...ref };
+}
+
 const NO_ATTRS: Partial<Card> = {
   pool: null,
   bbq_area: null,
@@ -486,6 +492,7 @@ const RENT_FIXTURES: Partial<Card>[] = [
     estimated_monthly_rent: 310,
     estimated_monthly_rent_ars: 478000,
     zone_ref: zoneRef({ zone: "capital", property_type: "apartment", bucket: "1", median_price: 310, sample: 64, trend: "flat", trend_pct: 0.4, trend_weeks: 4 }),
+    price_ref: priceRef({ level: "zona", place: "capital", value: 310, unit: "month", sample: 64, bucket: "1" }),
   },
   {
     ...NO_ATTRS,
@@ -525,6 +532,7 @@ const RENT_FIXTURES: Partial<Card>[] = [
     estimated_monthly_rent: 640,
     estimated_monthly_rent_ars: 988000,
     zone_ref: zoneRef({ zone: "rivadavia", property_type: "house", bucket: "3", median_price: 640, sample: 41, trend: "up", trend_pct: 2.6, trend_weeks: 4 }),
+    price_ref: priceRef({ level: "radius", radius_km: 1, value: 690, unit: "month", sample: 13, bucket: "3" }),
   },
   {
     ...NO_ATTRS,
@@ -560,6 +568,7 @@ const RENT_FIXTURES: Partial<Card>[] = [
     estimated_monthly_rent: 995,
     estimated_monthly_rent_ars: null,
     zone_ref: null,
+    price_ref: null,
   },
 ];
 
@@ -600,6 +609,7 @@ const SALE_FIXTURES: Partial<Card>[] = [
     rent_to_price_ratio: 0.6,
     semantic_qualities: ["luminoso"],
     zone_ref: zoneRef({ zone: "capital", property_type: "house", bucket: "3", median_price_per_sqm: 857, sample: 307, trend: "flat", trend_pct: -0.9, trend_weeks: 4, cap_pct: 7.77 }),
+    price_ref: priceRef({ level: "zona", place: "capital", value: 857, unit: "sqm", sample: 307, bucket: "3" }),
   },
   {
     ...NO_ATTRS,
@@ -638,6 +648,7 @@ const SALE_FIXTURES: Partial<Card>[] = [
     rent_to_price_ratio: 0.54,
     semantic_qualities: ["a estrenar"],
     zone_ref: zoneRef({ zone: "rivadavia", property_type: "apartment", bucket: "2", median_price_per_sqm: 1193, sample: 118, trend: "up", trend_pct: 3.8, trend_weeks: 4, cap_pct: 6.4 }),
+    price_ref: priceRef({ level: "radius", radius_km: 1, value: 1245, unit: "sqm", sample: 27, bucket: "2" }),
   },
   {
     ...NO_ATTRS,
@@ -670,6 +681,7 @@ const SALE_FIXTURES: Partial<Card>[] = [
     semantic_qualities: [],
     // Celda sin muestra propia: nivel superior, sin tendencia ni rentabilidad promedio.
     zone_ref: zoneRef({ zone: "capital", property_type: "house", bucket: "4plus", median_price_per_sqm: 809, sample: 8, fallback: "macro_zona" }),
+    price_ref: priceRef({ level: "macro_zona", place: "gran_san_juan", value: 809, unit: "sqm", sample: 172, bucket: "4plus" }),
   },
 ];
 
@@ -710,6 +722,7 @@ const LAND_FIXTURES: Partial<Card>[] = [
     age_flag: null,
     semantic_qualities: [],
     zone_ref: zoneRef({ zone: "capital", bucket: "lote_urbano", median_price_per_sqm: 141, sample: 212, trend: "flat", trend_pct: 0.6, trend_weeks: 2 }),
+    price_ref: priceRef({ level: "radius", radius_km: 1, value: 128, unit: "sqm", sample: 24, bucket: "lote_urbano" }),
   },
   {
     ...NO_ATTRS,
@@ -742,6 +755,7 @@ const LAND_FIXTURES: Partial<Card>[] = [
     age_flag: null,
     semantic_qualities: [],
     zone_ref: zoneRef({ zone: "santa_lucia", bucket: "lote_urbano", median_price_per_sqm: 35, sample: 96, trend: "up", trend_pct: 2.4, trend_weeks: 2 }),
+    price_ref: priceRef({ level: "radius", radius_km: 3, value: 31.9, unit: "sqm", sample: 16, bucket: "lote_urbano" }),
   },
   {
     ...NO_ATTRS,
@@ -778,6 +792,7 @@ const LAND_FIXTURES: Partial<Card>[] = [
     age_flag: "old",
     semantic_qualities: [],
     zone_ref: zoneRef({ zone: "pocito", bucket: "lote_rural_srv", median_price_per_hectare: 30000, sample: 31, fallback: "provincia", trend: "flat", trend_pct: 0.2, trend_weeks: 2 }),
+    price_ref: priceRef({ level: "provincia", place: "san_juan", value: 30000, unit: "hectare", sample: 31, bucket: "lote_rural_srv" }),
   },
 ];
 
@@ -833,6 +848,50 @@ function mockZoneRef(
     trend_weeks: trend ? 4 : null,
     cap_pct: !isRent && !isLand && n % 3 !== 2 ? Math.round((6 + r(22) * 2.5) * 100) / 100 : null,
   });
+}
+
+/**
+ * `price_ref` (contrato §4.8, 31/10): el valor representativo que P3 elige
+ * entre lo que rodea al aviso y su zona. En los mocks sale de la celda zonal
+ * generada: dos de cada tres avisos con el radio 1 (valor cerca del zonal,
+ * muestra chica, uno de cada cuatro sin distinguir dormitorios), el resto la
+ * zona o su fallback (valor idéntico al de `zone_ref`, como garantiza P2);
+ * lotes urbanos a veces del radio 2; lotes rurales siempre la zona (hectárea);
+ * alquiler con el radio solo en su propio tramo de dormitorios.
+ */
+function mockPriceRef(
+  n: number,
+  card: Pick<Card, "zone" | "property_type" | "operation" | "land_class">,
+  ref: ZoneRef | null,
+): PriceRef | null {
+  if (!ref) return null;
+  const r = (k: number) => rand(n * 11 + k);
+  const isRent = card.operation === "rent";
+  const isLand = card.property_type === "land";
+  const rural = isLand && card.land_class === "rural";
+  const unit = isRent ? "month" : rural ? "hectare" : "sqm";
+  const zonal = isRent ? ref.median_price : rural ? ref.median_price_per_hectare : ref.median_price_per_sqm;
+  if (zonal == null) return null;
+  const fromZone = (): PriceRef => ({
+    level: ref.fallback ?? "zona",
+    radius_km: null,
+    place: ref.fallback === "provincia" ? "san_juan" : ref.fallback === "macro_zona" ? "gran_san_juan" : card.zone,
+    value: zonal,
+    unit,
+    sample: ref.sample,
+    bucket: ref.bucket,
+  });
+  const todos = !isLand && n % 4 === 0;
+  if (rural || n % 3 === 1 || (isRent && todos)) return fromZone();
+  return {
+    level: "radius",
+    radius_km: isLand && n % 5 === 4 ? 3 : 1,
+    place: null,
+    value: Math.round(zonal * (0.85 + r(3) * 0.3) * 100) / 100,
+    unit,
+    sample: 10 + Math.round(r(4) * 50),
+    bucket: todos ? "todos" : ref.bucket,
+  };
 }
 
 /**
@@ -1177,7 +1236,12 @@ export function mockCard(
 
   if (!fx) {
     const ref = isTemp ? null : mockZoneRef(n, card);
-    return { ...card, zone_ref: ref, zone_stats_ref: isLand ? landCell(n, card, ref) : null };
+    return {
+      ...card,
+      zone_ref: ref,
+      price_ref: mockPriceRef(n, card, ref),
+      zone_stats_ref: isLand ? landCell(n, card, ref) : null,
+    };
   }
 
   // Caso fijo: pisa lo generado, salvo la zona y el tipo que pidió la búsqueda.
@@ -1189,6 +1253,7 @@ export function mockCard(
       property_type: type === "house" || type === "apartment" ? type : null,
     };
   }
+  if (fx.price_ref?.level === "zona") fixed.price_ref = { ...fx.price_ref, place: zone };
   fixed.deal_rating_reasons = fixed.deal_rating ? DEAL_REASONS[fixed.deal_rating] : null;
   fixed.zone_stats_ref = isLand ? landCell(n, fixed, fixed.zone_ref ?? null) : null;
   return fixed;

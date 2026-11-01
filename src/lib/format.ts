@@ -613,10 +613,12 @@ export function priceTrendInfo(
 export interface ZoneRefInfo {
   /** "Zona · Capital" */
   title: string;
-  /** "m² US$ 857" · "ha US$ 30.000"; null si la celda no trae el valor de esta clase. */
+  /** "m² US$ 857"; null sin `price_ref` mostrable (jamás la mediana de `zone_ref`). */
   value: string | null;
-  /** La celda es de un nivel superior (`fallback`): "(zona ampliada)". */
-  widened: boolean;
+  /** De dónde sale el valor: "a menos de 1 km" · "en la zona" · "en el Gran San Juan" · "en la provincia". */
+  where: string | null;
+  /** Solo detalle: "25 avisos · sin distinguir dormitorios". */
+  basis: string | null;
   /** Verde SOLO con la zona en suba. */
   green: boolean;
   trend: { dir: ZoneTrend; label: string } | null;
@@ -624,32 +626,67 @@ export interface ZoneRefInfo {
   yieldLine: string | null;
 }
 
+/** El nivel de fallback dicho con todas las letras (antes "(zona ampliada)"). */
+const PLACE_WHERE: Record<string, string> = {
+  gran_san_juan: "en el Gran San Juan",
+  periferia: "en la periferia",
+  alejado: "en los departamentos alejados",
+  san_juan: "en la provincia",
+};
+
 /**
- * Bloque Zona (Comprar, Lotes, Invertir): referencia de la zona para el mismo
- * tipo y dormitorios, SIN porcentaje contra el aviso. En Alquilar no va.
+ * Referencia de precio de la card (contrato §4.8, 31/10): el único número, el
+ * de `price_ref`, y de dónde sale. P1 no elige nivel ni recalcula; solo decide
+ * qué unidad se muestra:
+ *  - `sqm` sí (venta de vivienda y lotes urbanos);
+ *  - `hectare` NO: la hectárea mediana de la zona se aparta 139 % del precio
+ *    típico de un lote rural (P3, 31/10) — sería un número que desinforma
+ *    (decisión de P1 del 01/11);
+ *  - `month` no llega a la card (Alquilar no lleva bloque Zona, decisión 15).
+ */
+export function priceRefInfo(
+  card: Pick<Card, "price_ref">,
+): { value: string; where: string | null; basis: string | null } | null {
+  const ref = card.price_ref ?? null;
+  if (!ref || ref.value == null || ref.unit !== "sqm") return null;
+  // El decimal solo aporta en valores chicos (m² de lote por debajo de US$ 10).
+  const value = `m² US$ ${(ref.value >= 10 ? nf : nf1).format(ref.value)}`;
+  let where: string | null = null;
+  if (ref.level === "radius") {
+    where = ref.radius_km != null ? `a menos de ${nf.format(ref.radius_km)} km` : "alrededor del aviso";
+  } else if (ref.level === "zona") {
+    where = "en la zona";
+  } else if (ref.level === "macro_zona" || ref.level === "provincia") {
+    const place = clean(ref.place);
+    where = (place && PLACE_WHERE[place]) || (place ? `en ${zoneName(place)}` : "en la zona ampliada");
+  }
+  const parts: string[] = [];
+  if (ref.sample != null) parts.push(`${nf.format(ref.sample)} avisos`);
+  if (ref.bucket === "todos") parts.push("sin distinguir dormitorios");
+  return { value, where, basis: parts.length ? parts.join(" · ") : null };
+}
+
+/**
+ * Bloque Zona (Comprar, Lotes, Invertir): la referencia de precio del aviso
+ * (`price_ref`, 31/10) con la tendencia y la rentabilidad promedio de la zona
+ * (`zone_ref`), SIN porcentaje contra el aviso. En Alquilar no va.
  *
- * Fuente: `zone_ref` (pedido a P2 del 29/09). En lotes, mientras no llegue,
- * la celda que el contrato del 13/09 ya manda (`zone_stats_ref`): mismos
- * valores, sin tendencia.
+ * Sin `price_ref` mostrable ni rentabilidad de la zona → sin bloque: la
+ * mediana de `zone_ref` (y la celda `zone_stats_ref` de lotes) ya no se usa
+ * de respaldo.
  */
 export function zoneRefInfo(
-  card: Pick<Card, "zone_ref" | "zone_stats_ref" | "property_type" | "land_class" | "zone">,
+  card: Pick<Card, "zone_ref" | "price_ref" | "zone">,
   vertical: CardVertical,
 ): ZoneRefInfo | null {
   if (vertical === "alquilar") return null;
-  const isLand = card.property_type === "land";
   const z = card.zone_ref ?? null;
-  const cell = z ?? (isLand ? (card.zone_stats_ref ?? null) : null);
-  if (!cell) return null;
-  const rural = isLand && card.land_class === "rural";
-  const median = rural ? cell.median_price_per_hectare : cell.median_price_per_sqm;
-  // El decimal solo aporta en valores chicos (m² de lote por debajo de US$ 10).
-  const value = median != null ? `${rural ? "ha" : "m²"} US$ ${(median >= 10 ? nf : nf1).format(median)}` : null;
+  const ref = priceRefInfo(card);
   const yieldLine =
     vertical === "invertir" && z?.cap_pct != null
       ? `Rentabilidad promedio de la zona: ${fmtPctAbs(z.cap_pct)} anual`
       : null;
-  if (!value && !yieldLine) return null;
+  if (!ref && !yieldLine) return null;
 
   let trend: ZoneRefInfo["trend"] = null;
   if (z?.trend === "flat") trend = { dir: "flat", label: "Estable" };
@@ -660,8 +697,9 @@ export function zoneRefInfo(
 
   return {
     title: `Zona · ${zoneName(clean(z?.zone) ?? card.zone)}`,
-    value,
-    widened: cell.fallback != null,
+    value: ref?.value ?? null,
+    where: ref?.where ?? null,
+    basis: ref?.basis ?? null,
     green: z?.trend === "up",
     trend,
     yieldLine,

@@ -40,7 +40,7 @@ test.describe("cards · comprar · propias", () => {
     await expect(first.getByTestId("position").locator(".posblock-sub")).toContainText("30 casas en Capital ·");
     await expect(first.getByTestId("position").locator(".posblock-sub")).not.toContainText("dorm.");
     await expect(first.getByTestId("price-trend")).toHaveText(/^En baja 12\s% · antes US\$ 170\.000$/);
-    await expect(first.getByTestId("zone-ref").locator(".zoneblock-value")).toHaveText("m² US$ 857");
+    await expect(first.getByTestId("zone-ref").locator(".zoneblock-value")).toHaveText("m² US$ 857 en la zona");
     await expect(page.locator('[data-id="sj-mks1"]').getByTestId("position").locator(".posblock-sub")).toContainText(
       "30 departamentos en Rivadavia, 2 dorm.",
     );

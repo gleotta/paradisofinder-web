@@ -1,6 +1,6 @@
 # Guía de cambios en P1 — Cards por vertical — 2026-09-29
 
-**Para: el equipo de P1 (este repo). Estado: Fase 0 ejecutada el 29/09 — qué se hizo y dónde se apartó de esta guía, en §8. P3 entregó el 30/09 — qué cambia para P1, en §9. P2 entregó el 30/09-01/10 — qué cambió P1 y qué verificó, en §10. German revisó el detalle el 02-03/10 — "Avisos similares" de 5 con foto y el hallazgo de las cards sin Zona, en §11.**
+**Para: el equipo de P1 (este repo). Estado: Fase 0 ejecutada el 29/09 — qué se hizo y dónde se apartó de esta guía, en §8. P3 entregó el 30/09 — qué cambia para P1, en §9. P2 entregó el 30/09-01/10 — qué cambió P1 y qué verificó, en §10. German revisó el detalle el 02-03/10 — "Avisos similares" de 5 con foto y el hallazgo de las cards sin Zona, en §11. P3 y P2 entregaron el 31/10 la referencia de precio `price_ref` (un solo número, elegido por P3 entre lo que rodea al aviso y su zona) — qué cambió P1 el 01/11, en §13.**
 
 Qué es este documento: **la guía de ejecución de P1**. Sale de las 21
 decisiones cerradas con German el 29/09, que están registradas con su
@@ -105,6 +105,18 @@ zone_ref?: {
   week: string;                        // lunes ISO de la celda
 } | null;
 
+// Referencia de precio (P3 31/10 → P2 contrato §4.8; §13): LA única que se muestra.
+// Reemplaza a las medianas de `zone_ref`, que siguen llegando y ya no se muestran.
+price_ref?: {
+  level: "radius" | "zona" | "macro_zona" | "provincia";
+  radius_km: number | null;            // 1 (radio 1) · 3 o 5 (radio 2, solo lotes urbanos); null en los niveles de zona
+  place: string | null;                // "capital" · "gran_san_juan" / "periferia" / "alejado" · "san_juan"; null con radius
+  value: number;                       // USD, por `unit`
+  unit: "sqm" | "month" | "hectare";
+  sample: number | null;
+  bucket: string | null;               // "1" … "4plus" · "todos" (sin distinguir dormitorios) · "lote_*"
+} | null;
+
 // Alquiler: renta estimada en pesos (P2 convierte con la tasa de la corrida). Solo detalle.
 estimated_monthly_rent_ars?: number | null;
 ```
@@ -122,7 +134,7 @@ Nada de lo existente cambia de nombre ni de tipo.
 | Precio | $ /mes + ≈ US$ | US$ + US$/m² | US$ + US$/m² o US$/ha | como Comprar | `price`, `price_usd`, `price_per_sqm`, `price_per_sqm_land`, `price_per_hectare` | hoy |
 | Título "Tipo en Zona", datos, dirección | sí | sí, con cubierta y lote | sí, con m² de lote y medidas | como Comprar | `bedrooms`… `covered_area_sqm`, `area_sqm`, `frontage_m`, `depth_m` | hoy |
 | **Bloque de posición** (porcentaje grande + "por debajo/encima de similares" + "N similares en Zona, D dorm." + barra de percentil + "ver similares") | sí | sí | sí, "lotes urbanos/rurales en Zona" | sí | `valuation_gap_pct`, `price_percentile`, `comparables_count`, `deal_rating` | hoy |
-| **Bloque Zona** (nombre, "m² US$ X" o "ha US$ X", flecha; verde si sube) | — | sí | sí | sí, más "Rentabilidad promedio de la zona: X % anual" | `zone_ref` | P2 (+P3) |
+| **Bloque Zona** (nombre, "m² US$ X" y de dónde sale, flecha; verde si sube) | — | sí | sí | sí, más "Rentabilidad promedio de la zona: X % anual" | `price_ref` (valor) + `zone_ref` (tendencia, rentabilidad) | hoy (§13) |
 | **Bloque "Esta propiedad · estimación"** (neutro): "Rentabilidad anual estimada X %", "Podría alquilarse a ≈ US$ Y/mes" + aclaración | — | — | — | sí | `gross_yield_pct`, `estimated_monthly_rent` | hoy (creíble tras P3 §4.3) |
 | Fechas (C13) | sí | sí | sí | sí | `days_since_update`, `days_on_market` | hoy |
 | Chips duros (orden por vertical, §2.3) | sí | sí | sí | sí | atributos, `condition`, lote | hoy |
@@ -147,10 +159,10 @@ Nada de lo existente cambia de nombre ni de tipo.
 - `null` → nada.
 
 **Bloque Zona** (Comprar, Lotes, Invertir).
-- Título: "ZONA · {zoneName}". Valor: vivienda "m² US$ {median_price_per_sqm}"; lote urbano ídem; lote rural "ha US$ {median_price_per_hectare}". Invertir agrega "Rentabilidad promedio de la zona: {cap_pct} % anual" cuando `cap_pct != null`.
+- Título: "ZONA · {zoneName}". **Valor (desde el 31/10, §13): el de `price_ref`, único, y de dónde sale**: "m² US$ {value} a menos de {radius_km} km" (`level: radius`) · "… en la zona" (`zona`) · "… en el Gran San Juan" / "en la periferia" / "en los departamentos alejados" (`macro_zona`, según `place`) · "… en la provincia" (`provincia`). Solo `unit: sqm`: la hectárea rural no se muestra (§13) y el mes de alquiler no llega a la card (decisión 15). Invertir agrega "Rentabilidad promedio de la zona: {cap_pct} % anual" cuando `zone_ref.cap_pct != null`.
 - Fondo verde con `zone_ref.trend === "up"`; neutro con `"flat"`, `"down"` o `null`. Pastilla: "En suba N %" / "En baja N %" / "Estable" (`trend_pct`); sin `trend` → sin pastilla.
-- `fallback != null` → se muestra igual, con "(zona ampliada)" al lado del valor.
-- Sin `zone_ref` → ranura vacía.
+- Solo en el detalle (`full`): "{sample} avisos · sin distinguir dormitorios" (`bucket: todos`) debajo del valor.
+- Sin `price_ref` mostrable ni `cap_pct` → ranura vacía. Las medianas de `zone_ref` y la celda `zone_stats_ref` de lotes **no** se usan de respaldo; "(zona ampliada)" ya no existe.
 
 **Bloque "Esta propiedad · estimación"** (Invertir): siempre neutro. "Rentabilidad anual estimada {gross_yield_pct} %" y "Podría alquilarse a ≈ US$ {estimated_monthly_rent}/mes". Aclaración fija: *Según alquileres similares publicados en la zona. Rentabilidad = un año de ese alquiler ÷ precio de este aviso.* Sin ninguno de los dos campos → ranura vacía.
 
@@ -185,7 +197,7 @@ Una spec por vertical contra los mocks, y la misma batería en modo "contrato" c
 2. **Aparece en toda card:** el aviso de estimación (C10), textual.
 3. **Posición:** con `deal_rating: "green"` el bloque tiene la clase verde; con cualquier otro valor no la tiene; con `capped` dice "verificar el aviso"; la barra no tiene texto central; el link "ver similares" apunta a `/propiedad/<id>#comparables`.
 4. **Tendencia:** `"down"` → pastilla con "En baja" y el precio anterior en la moneda del aviso; `"up"` → "En alta" sin "antes"; `null` → sin pastilla.
-5. **Zona:** ausente en Alquilar; presente en Comprar, Lotes e Invertir cuando `zone_ref` llega, ausente cuando es `null`; verde solo con `trend: "up"`; "ha US$" en rural y "m² US$" en urbano; "(zona ampliada)" con `fallback`.
+5. **Zona:** ausente en Alquilar; presente en Comprar, Lotes e Invertir cuando llega `price_ref` en m² (o `cap_pct` en Invertir), ausente si no; verde solo con `trend: "up"`; el valor dice de dónde sale ("a menos de N km" / "en la zona" / "en el Gran San Juan" / "en la provincia"); nunca "ha US$" (la hectárea rural no se muestra) ni "(zona ampliada)"; la base ("N avisos · sin distinguir dormitorios") solo en el detalle.
 6. **Invertir:** bloque "Esta propiedad · estimación" con rentabilidad y alquiler, siempre neutro; "Rentabilidad promedio de la zona" solo con `cap_pct`.
 7. **Lotes:** sello de clase; "US$ X/ha" en rural; chips "Con servicios" solo con `true`; nunca "sin servicios".
 8. **Fechas:** "margen para negociar" aparece solo cuando `days_on_market` supera el corte de la vertical.
@@ -764,3 +776,176 @@ navegador (30 de 30 por la ruta propia).
 - `docs/RESPUESTA_P1_A_P2_2026-10-04.md` es un borrador de cierre, sin
   pedidos: German decide si se copia al repo de P2 o no se manda.
 - El video contra producción (§11.6) sigue esperando el deploy de P2 y P3.
+
+## 13. Referencia de precio `price_ref`: un solo número, diciendo de dónde sale (31/10-01/11)
+
+**Origen.** Pedido de P1 a P3 del 31/10 (indicadores por radio,
+`docs/PEDIDO_P1_A_P3_2026-10-31_indicadores-por-radio.md`); respuesta de P3
+del mismo día (`docs/RESPUESTA_P3_A_P1_2026-10-31_indicadores-por-radio.md`)
+y su prompt a P2 (`docs/PROMPT_P3_A_P2_2026-10-31_price-ref.md`); contrato
+§4.8 de P2. **Decisión de German del 31/10:** zona, radio 1 (1 km) y radio 2
+(3 km urbano / 5 km rural) son tres referencias por aviso y mostrar las tres
+es demasiado; **P3 elige una** con una cascada por vertical (venta r1 → zona;
+alquiler r1 solo en su tramo de dormitorios → zona; lote urbano r1 → r2 →
+zona; lote rural zona), **P2 la sirve como `price_ref`** y **reemplaza a la
+mediana de `zone_ref`**. Lo único que cambia: tendencia, rentabilidad
+promedio y semana siguen saliendo de `zone_ref`. Las tres preguntas
+abiertas de P3 las resuelve P1 solo (§13.3): **a P3 no se le contesta nada,
+la entrega está cerrada** (German, 01/11; regla de no abrir rondas).
+
+### 13.1 Qué llega (Docker local de P2, 01/11)
+
+- `price_ref` en toda card y en el detalle:
+  `{level, radius_km, place, value, unit, sample, bucket}`. Visto en 60
+  cards: venta con `radius` de 1 km (bucket propio o `todos`), `zona` y
+  `macro_zona` con `place: gran_san_juan`; alquiler en `month`; lotes urbanos
+  con `radius` de 1 y de 5 km (Nueve de Julio: radio 2 rural) y `zona`;
+  lotes rurales en `hectare` por `zona` y por `macro_zona` con
+  **`place: alejado`** — la macro zona no es solo `gran_san_juan`: también
+  `periferia` y `alejado`, y P1 les pone nombre.
+- En los niveles de zona el valor coincide con la mediana de `zone_ref` del
+  mismo aviso (visto aviso por aviso en esa muestra), como P2 garantiza.
+- Railway: todavía no (sync de P3 y deploy de P2, los decide German).
+
+### 13.2 Lo que P1 cambió
+
+- `src/lib/p2/types.ts`: `PriceRef` y `Card.price_ref`; `ZoneRef` queda
+  entero con la nota de que sus medianas ya no se muestran; `zone_stats_ref`
+  deja de ser respaldo.
+- `src/lib/format.ts`: `priceRefInfo` (solo `unit: sqm`; texto por nivel: "a
+  menos de N km" / "en la zona" / "en el Gran San Juan" / "en la periferia" /
+  "en los departamentos alejados" / "en la provincia"; `basis` = "N avisos ·
+  sin distinguir dormitorios"). `zoneRefInfo` ya no lee las medianas de
+  `zone_ref` ni `zone_stats_ref`: sin `price_ref` mostrable ni `cap_pct`, sin
+  bloque. `ZoneRefInfo.widened` ("(zona ampliada)") desaparece; entran
+  `where` y `basis`.
+- `src/components/signals.tsx`: `ZoneBlock` muestra `where` en un `<small>`
+  y, con `full` (detalle), la base. **Defecto visto en la captura y
+  corregido:** el espacio inicial dentro del `<small>` (inline-block) se
+  colapsa y salía "US$ 1.340a menos de 1 km"; el espacio va ahora como nodo
+  de texto propio. (El "(zona ampliada)" anterior tenía la misma estructura.)
+- `src/app/propiedad/[id]/page.tsx`: `<ZoneBlock full />`. `globals.css`:
+  `.zoneblock-basis`.
+- `src/lib/p2/mocks.ts` (fallback técnico, no se prueba con ellos):
+  `priceRef()`, `mockPriceRef()` derivado de la celda zonal generada, y los
+  casos fijos: `sj-mks0` zona 857, `sj-mks1` radio 1 km 1.245, `sj-mks2`
+  macro zona 809; lotes radio 1 y 3 km; rural hectárea por provincia;
+  alquiler en `month`.
+- Pruebas: `PRICE_REF` en `tests/e2e/cards-vertical.ts` (m² + de dónde sale;
+  nunca "ha US$"; la base no está en la card); casos fijos actualizados en
+  la batería, `cards-comprar` ("m² US$ 857 en la zona") y `cards-lotes` (el
+  rural sin bloque Zona).
+
+### 13.3 Decisiones de P1 (01/11) — las tres preguntas de P3, resueltas acá
+
+1. **Hectárea rural: no se muestra.** P3 midió que la hectárea mediana de la
+   zona se aparta 139 % del precio típico de un lote rural; un número así
+   desinforma aunque P1 no lo pinte. `unit: hectare` → sin referencia; la
+   card del lote rural queda sin bloque Zona. P3 sigue calculándolo. Una
+   línea para revertir.
+2. **Radios de lotes rurales: con la zona.** A 5 km llegan al mínimo el 2 %;
+   mientras la hectárea no se muestre, no cambia nada visible. No se abre.
+3. **`is_shared_or_partial` en la serie zonal: sí, pero cuando P3 toque
+   `zone_stats`.** 17 avisos; anotado en B7, no es pedido.
+4. **Alquiler: el `month` no se muestra** (decisión 15: la card de Alquilar
+   no lleva bloque Zona). Queda disponible.
+5. **"N avisos · sin distinguir dormitorios" solo en el detalle**; en la card
+   no entra (380 px).
+
+### 13.4 Resultado de las pruebas (01/11)
+
+- `cards-{comprar,lotes,invertir,alquilar}.spec.ts`, proyecto `mobile`,
+  contra un P1 de desarrollo (:3001) apuntado al **Docker local de P2**
+  (`localhost:8000`, `P2_MODE=live`): **38 passed (5,0 min)**.
+- Tras el arreglo del espacio, las pruebas de Zona de las cuatro verticales:
+  **7 passed (54.0s)**.
+- Capturas a 380 px (card de venta con "m² US$ 900 a menos de 1 km" y
+  bloque del detalle con "25 avisos · sin distinguir dormitorios" y la
+  pastilla "Estable") enviadas a German el 01/11.
+- `tsc --noEmit` y `eslint` limpios (las dos advertencias de
+  `scripts/qa-bajas-fuente.mjs` son previas).
+
+### 13.5 Pendiente
+
+- Nada para P3 ni para P2: la entrega está cerrada.
+- **Orden de salida: sync de P3 a Railway → deploy de P2 → deploy de P1.**
+  Si P1 sale antes, las cards de producción quedan sin referencia de precio
+  (ya no cae a `zone_ref`). El cambio está en el árbol de trabajo de
+  `develop`, sin commit (no se pidió).
+- El Docker de P1 del :3000 sigue con la imagen anterior; se rehace con el
+  commit en `develop` (hook). Listo para el commit (German lo pide); el push
+  espera a P3 y P2.
+
+### 13.6 Navegación completa del 01/11 y un bug previo del mapa
+
+German pidió verificación, navegación y pruebas de que todo anda (y nada
+para P3). Recorrido con Chrome vía Playwright, a 380 px y a 1280 px, sobre
+el **build de producción** (`next build` + `next start -p 3001`) apuntado al
+Docker local de P2: home → búsqueda escrita en el campo ("casas en venta en
+capital") → 599 resultados, chips "Entendí", resumen, mapa (escritorio: "466
+de 599 con ubicación publicada") → scroll infinito (10 → 20 cards) → selector
+Lotes, Alquilar e Invertir con resultados en pantalla → detalle (galería,
+Lectura de FINDER con el bloque Zona y su base, Avisos similares, Consultar,
+Ubicación). Sin "None/null/undefined/NaN", sin errores de consola ni HTTP
+propios, sin scroll horizontal en mobile. Capturas en el registro de la
+sesión; a German se le mandaron la card y el bloque del detalle.
+
+**Bug previo, visto en escritorio:** al cambiar de vertical con el selector
+(Comprar → Lotes, y también → Invertir), la página quedaba con scroll
+horizontal (1.445 px sobre 1.280) de forma permanente. Idéntico en el Docker
+viejo del :3000 (imagen anterior a este cambio), así que no lo introdujo
+`price_ref`. Causa: `ResultsMap` renderizaba el `div` host con un
+`className` que dependía de la capa; Leaflet agrega sus clases
+(`leaflet-container`, la del `overflow: hidden`) a ese mismo elemento, y al
+cambiar la capa React volvía a escribir `className` y se las borraba: teselas
+y marcadores (`price-marker--land`) quedaban fuera del mapa, pasados del
+borde. La prueba "layout: sin scroll horizontal" no lo veía porque carga por
+URL, sin cambiar de vertical. **Arreglo:** `className="leaflet-host"` fijo;
+la capa ya viajaba en `data-layer` (`leaflet-host--land` no tenía CSS).
+Prueba nueva en `cards-lotes.spec.ts` ("cambiar a Lotes con resultados en
+pantalla no desborda la página"): cambia de vertical con el selector y exige
+que el host siga siendo `leaflet-container`.
+
+**Segundo bug previo, destapado por la batería completa:** `/propiedad/<id>`
+con un id que no es UUID daba **500** (página de error), también en el Docker
+viejo. P2 responde 500 (no 404) a todo id sin forma de UUID, y la página del
+detalle llamaba a P2 sin atrapar el error (`generateMetadata` sí lo atrapaba).
+**Arreglo** en `getProperty` (`src/lib/p2/client.ts`): en `live`, un id que
+no tiene forma de UUID es "no existe" → 404 de P1 sin llamar a P2; en `auto`
+se deja pasar para que los ids de los mocks sigan cayendo al fallback con P2
+caído. Un UUID inexistente ya daba 404 (P2 responde 404 y P1 lo mapea). Prueba
+nueva en `compartir-og-sitemap.spec.ts` ("un id que no es de P2 da 404, no
+500", solo en `live`).
+
+### 13.7 Batería completa del 01/11 (build de producción, Docker local de P2)
+
+| Corrida | Resultado |
+|---|---|
+| Las 16 specs, proyecto `mobile` (380 px) | **78 passed · 1 failed · 1 skipped** (9,3 min) |
+| Las 16 specs, proyecto `desktop` (1280 px) | **79 passed · 1 skipped** (9,5 min) |
+| Tras los dos arreglos: `cards-lotes` + `compartir-og-sitemap`, mobile y desktop, con las dos pruebas nuevas | **28 passed** (3,0 min) |
+
+La única falla (mobile, "sitemap: propiedades con lastmod y páginas que
+existen") no era del código: el `next start` local cargó del disco un
+snapshot del sitemap del 01/10 generado con mocks (`.cache/property-sitemap.json`,
+gitignored), que listaba `/propiedad/sj-mks0`, y esa URL daba el 500 de
+arriba. El refresco en segundo plano lo reemplazó durante la corrida (en
+escritorio la misma prueba pasó) y el sitemap quedó con **4.037 propiedades
+reales y 0 ids de mocks**; el Docker del :3000 nunca tuvo ese snapshot. La
+prueba saltada es la misma en los dos proyectos (condición de entorno de la
+spec, no una falla). Verificado además a mano sobre el build nuevo: 404 en
+`no-existe`, `sj-mks0` y un UUID inexistente; 200 en una propiedad real; sin
+desborde en escritorio durante 12 s tras cambiar a Lotes, ningún elemento
+fuera del mapa pasado del borde.
+
+### 13.8 QA de datos de `price_ref` (01/11)
+
+German pidió una prueba de calidad de los datos nuevos:
+`docs/QA_DATOS_2026-11-01_price-ref.md`. Resumen: 5.346 avisos de
+`/search/structured`, `price_ref` en el 99,5 %, 0 violaciones del contrato,
+paridad exacta con `zone_ref` (2.262) y con las columnas `ref_*` de P3
+(5.321); el radio 1 km queda más cerca del precio del aviso que la zona (venta
+24 % contra 26 %, lotes urbanos 26 % contra 45 %); la hectárea rural no sirve
+(69 % de mediana, p90 481 %), ratificado §13.3. Los extremos son avisos con
+precio o superficie mal cargados en el portal, ya marcados como "verificar el
+aviso". Nada para P2 ni P3.

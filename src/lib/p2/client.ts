@@ -195,8 +195,15 @@ export function searchSync(body: StreamRequest): Promise<SyncSearchResponse> {
 /* Detalle y eventos — spec §4                                         */
 /* ------------------------------------------------------------------ */
 
+/** Los ids de P2 son UUID; a cualquier otra cosa P2 responde 500 (visto el 01/11). */
+const PROPERTY_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function getProperty(id: string): Promise<PropertyDetailResponse | null> {
   if (mocksEnabled()) return mockGetProperty(id);
+  // En `live`, un id que no tiene forma de UUID es "no existe" (404 de P1) sin
+  // llamar a P2: si no, su 500 se volvía página de error. En `auto` se deja
+  // pasar para que los ids de los mocks sigan cayendo al fallback con P2 caído.
+  if (mode() === "live" && !PROPERTY_ID.test(id)) return null;
   try {
     const res = await p2Fetch(`/property/${encodeURIComponent(id)}`, { method: "GET" });
     if (res.status === 404) return null;

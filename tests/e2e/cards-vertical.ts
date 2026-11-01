@@ -44,6 +44,9 @@ export const NOTICE = "Valores estimados a partir de avisos publicados, no de op
 /** Lo que la card no puede decir: jerga interna, score, semáforos de inversión y "no informado" crudo. */
 const FORBIDDEN = /\b(Score|Reventa|Datos completos|P1|P2|P3|cap|gap|None|null|unknown|undefined|NaN)\b|Renta est\.|Excelente estado|Buen estado/;
 
+/** El valor del bloque Zona (31/10): `price_ref` en m² y de dónde sale. Nunca "ha US$" ni la mediana de `zone_ref`. */
+const PRICE_REF = /^m² US\$ [\d.,]+ (a menos de [135] km|en la zona|en el Gran San Juan|en la periferia|en los departamentos alejados|en la provincia)$/;
+
 const GREEN_BG = "rgb(226, 242, 234)";
 const NEUTRAL_BG = "rgb(244, 237, 247)";
 
@@ -171,7 +174,11 @@ export function verticalBattery(c: VerticalCase): void {
         if ((await block.count()) === 0) continue;
         await expect(block.locator(".block-kicker")).toHaveText(/^Zona · \S/i);
         const value = block.locator(".zoneblock-value");
-        if (await value.count()) await expect(value).toHaveText(/^(m²|ha) US\$ [\d.,]+( \(zona ampliada\))?$/);
+        // Un solo número, el de `price_ref`, diciendo de dónde sale. La hectárea de la zona se
+        // aparta 139 % del precio típico de un lote rural (P3 31/10) y no se muestra.
+        if (await value.count()) await expect(value).toHaveText(PRICE_REF);
+        // La base del valor (muestra, "sin distinguir dormitorios") es del detalle, no de la card.
+        await expect(block.locator(".zoneblock-basis")).toHaveCount(0);
         // Referencia, no comparación: el único porcentaje posible es el de la tendencia de la zona.
         expect(await block.locator(".zoneblock-main").innerText()).not.toMatch(/por debajo|por encima/);
         const up = (await block.locator('.zoneblock-trend[data-trend="up"]').count()) > 0;
@@ -184,21 +191,21 @@ export function verticalBattery(c: VerticalCase): void {
       await expect(flat).toHaveAttribute("data-tone", "neutral");
       await expect(rising.locator(".zoneblock-trend")).toHaveText(/^En suba \d+(,\d)?\s%$/);
       await expect(rising).toHaveAttribute("data-tone", "green");
-      await expect(widened).toContainText("(zona ampliada)");
-      // Sin `zone_ref` la ranura queda vacía; en lotes queda la celda que el
-      // contrato del 13/09 ya manda (`zone_stats_ref`), sin tendencia.
-      await expect(fixed(page, c, 4)).toBeVisible();
       if (c.id === "lotes") {
-        await expect(fixed(page, c, 4).getByTestId("zone-ref").locator(".zoneblock-value")).toHaveText(/^(m²|ha) US\$ [\d.,]+/);
-        await expect(fixed(page, c, 4).getByTestId("zone-ref")).toHaveAttribute("data-tone", "neutral");
-        await expect(fixed(page, c, 4).getByTestId("zone-ref").locator(".zoneblock-trend")).toHaveCount(0);
+        await expect(flat.locator(".zoneblock-value")).toHaveText(/^m² US\$ [\d.,]+ a menos de 1 km$/);
+        await expect(rising.locator(".zoneblock-value")).toHaveText(/^m² US\$ [\d.,]+ a menos de 3 km$/);
+        // Lote rural: `price_ref` en hectáreas no se muestra, y sin rentabilidad de zona no hay bloque.
+        await expect(widened).toHaveCount(0);
       } else {
-        await expect(fixed(page, c, 4).getByTestId("zone-ref")).toHaveCount(0);
+        await expect(flat.locator(".zoneblock-value")).toHaveText(/^m² US\$ [\d.,]+ en la zona$/);
+        await expect(rising.locator(".zoneblock-value")).toHaveText(/^m² US\$ [\d.,]+ a menos de 1 km$/);
+        // El nivel de fallback se dice con todas las letras (antes "(zona ampliada)").
+        await expect(widened.locator(".zoneblock-value")).toHaveText(/^m² US\$ [\d.,]+ en el Gran San Juan$/);
       }
-      if (c.id === "lotes") {
-        await expect(flat.locator(".zoneblock-value")).toHaveText(/^m² US\$/);
-        await expect(widened.locator(".zoneblock-value")).toHaveText(/^ha US\$/);
-      }
+      // Sin `price_ref` la ranura queda vacía: ni la mediana de `zone_ref` ni la celda de
+      // lotes del 13/09 (`zone_stats_ref`) se usan de respaldo.
+      await expect(fixed(page, c, 4)).toBeVisible();
+      await expect(fixed(page, c, 4).getByTestId("zone-ref")).toHaveCount(0);
     });
 
     test("fechas: 'margen para negociar' solo pasado el corte de la vertical", async ({ page }) => {

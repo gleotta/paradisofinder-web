@@ -264,7 +264,7 @@ export default async function PropertyPage({
                 ))}
 
                 {/* Referencia de zona y, en Invertir, la estimación: los mismos bloques de la card */}
-                {zoneRef && <ZoneBlock info={zoneRef} />}
+                {zoneRef && <ZoneBlock info={zoneRef} full />}
                 {estimate && <EstimateBlock info={estimate} />}
 
                 {marketContext && <p className="market-context">{marketContext}</p>}
