@@ -17,7 +17,8 @@
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SEARCH_ID_RE = /^([0-9a-f-]{36})\.(\d{1,4})$/i;
 
-export type CardOrigin = "list" | "related" | "map" | "comparable";
+/** `invest_pick` (02/11): card de la "Selección de FINDER" del análisis de inversión. */
+export type CardOrigin = "list" | "related" | "map" | "comparable" | "invest_pick";
 
 export function isUuid(v: unknown): v is string {
   return typeof v === "string" && UUID_RE.test(v);
@@ -39,7 +40,7 @@ export function sessionFromSearchId(searchId: string | null | undefined): string
 }
 
 export function isCardOrigin(v: unknown): v is CardOrigin {
-  return v === "list" || v === "related" || v === "map" || v === "comparable";
+  return v === "list" || v === "related" || v === "map" || v === "comparable" || v === "invest_pick";
 }
 
 /** URL del detalle con el contexto de búsqueda que la pestaña nueva hereda. */

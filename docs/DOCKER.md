@@ -78,6 +78,7 @@ P2_API_KEY=                        # X-API-Key de P2; vacío = auth apagada (dev
 | `CONTACT_WHATSAPP_TEXT` | (no está en el compose) | Texto prellenado; agregar si se quiere otro. |
 | `EVENTS_LOG_DIR` | `/data/logs` | Log de eventos en el volumen `pfw-data`. Vacío = solo stdout. |
 | `PORT` / `HOSTNAME` | defaults de la imagen (3000 / `::`) | No tocar. Para otro puerto en el host, cambiar el lado izquierdo de `ports:` (`"3001:3000"`). |
+| `INVEST_ANALYSIS_ENABLED` · `INVEST_QUOTA_PER_VISITOR` · `INVEST_QUOTA_WINDOW_MIN` · `INVEST_DAILY_MAX` · `INVEST_CACHE_TTL_MIN` | `${…:-}` (vacías = defaults) | 02/11: análisis de inversión (`docs/DECISION_2026-11-02_analisis-inversion.md`). Las mismas opcionales que en Railway; el compose las deja pasar desde el shell o el `.env` para probar otros cupos en local (p. ej. `INVEST_QUOTA_PER_VISITOR=40 docker compose up -d` para correr la batería e2e sin chocar con el cupo de 5 cada 10 min por visitante e IP). Con `docker compose up -d` sin la variable vuelven los defaults. |
 
 Ojo: **el `.env` también lo lee `npm run dev`** (Next carga `.env` en todos los modos).
 Con solo `CONTACT_WHATSAPP` y `P2_API_KEY` adentro eso es deseable (misma config); por eso

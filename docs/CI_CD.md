@@ -104,6 +104,7 @@ con HTTP 200:
 | `GET /` → 200 con `Content-Security-Policy` con nonce | el hardening (`src/proxy.ts`) corre en la imagen standalone |
 | `POST /api/sessions` + `POST /api/search/stream` (SSE, CRLF) → `cards` con `total_matches > 0` y cierre `done` | el canal real de la UI, de punta a punta, con ids que no son los de `/mocks` |
 | mismo `total_matches` que `POST /search/text` del P2 (`SMOKE_P2_BASE_URL`) | "casas en rawson" → 180 en los dos lados, o P1 no habla con ese P2 |
+| `POST /api/invest/analysis` con una sonda simple → `skip` (o `plan`) | 02/11: el análisis de inversión responde sin pagar la redacción; un 204 (canal apagado o P2 sin `/search/invest`, como stage hasta el deploy de P2) es una nota, no un fallo; 5xx sí falla |
 
 ```bash
 node scripts/ci/smoke.mjs http://localhost:3000                                   # a mano, sin cruce

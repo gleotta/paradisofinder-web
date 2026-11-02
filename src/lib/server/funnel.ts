@@ -26,6 +26,22 @@ export interface DayFunnel {
   chips: number;
   clarifications: number;
   t_first_cards: number[];
+  /** Análisis de inversión (02/11): pedidos, con panel (`plan`), respondidos, skip, fallos, cupo, costo (ledger del server). */
+  invest: InvestFunnel;
+}
+
+export interface InvestFunnel {
+  requested: number;
+  started: number;
+  answered: number;
+  skipped: number;
+  failed: number;
+  quota: number;
+  cancelled: number;
+  /** Suma de `cost_usd` de los `done` asentados por el server (`invest_analysis_server`). */
+  cost_usd: number;
+  /** Latencias hasta `done` medidas en el cliente (`t_done`). */
+  t_done: number[];
 }
 
 export interface FunnelReport {
@@ -55,8 +71,28 @@ function logDir(): string | null {
   return dir ? path.resolve(/* turbopackIgnore: true */ process.cwd(), dir) : null;
 }
 
+function emptyInvest(): InvestFunnel {
+  return { requested: 0, started: 0, answered: 0, skipped: 0, failed: 0, quota: 0, cancelled: 0, cost_usd: 0, t_done: [] };
+}
+
 function empty(day: string): DayFunnel {
-  return { day, searches: 0, cards: 0, opened: 0, contact: 0, source: 0, contact_clicks: 0, zero: 0, errors: 0, slow: 0, fallback: 0, chips: 0, clarifications: 0, t_first_cards: [] };
+  return {
+    day,
+    searches: 0,
+    cards: 0,
+    opened: 0,
+    contact: 0,
+    source: 0,
+    contact_clicks: 0,
+    zero: 0,
+    errors: 0,
+    slow: 0,
+    fallback: 0,
+    chips: 0,
+    clarifications: 0,
+    t_first_cards: [],
+    invest: emptyInvest(),
+  };
 }
 
 export function percentile(values: number[], p: number): number | null {
@@ -193,6 +229,34 @@ export async function buildFunnel(days = 30): Promise<FunnelReport> {
         case "clarification_chip_selected":
           d.clarifications++;
           break;
+        /* ---- análisis de inversión (02/11) ---- */
+        case "invest_analysis_requested":
+          d.invest.requested++;
+          break;
+        case "invest_analysis_started":
+          d.invest.started++;
+          break;
+        case "invest_analysis_answered":
+          d.invest.answered++;
+          if (typeof p.t_done === "number") d.invest.t_done.push(p.t_done);
+          break;
+        case "invest_analysis_skipped":
+          d.invest.skipped++;
+          break;
+        case "invest_analysis_failed":
+        case "invest_analysis_timeout":
+          d.invest.failed++;
+          break;
+        case "invest_analysis_quota_reached":
+          d.invest.quota++;
+          break;
+        case "invest_analysis_cancelled":
+          d.invest.cancelled++;
+          break;
+        case "invest_analysis_server":
+          // El costo sale del ledger del server: no depende de que el browser mande su evento.
+          if (typeof p.cost_usd === "number") d.invest.cost_usd += p.cost_usd;
+          break;
       }
     }
   }
@@ -217,6 +281,17 @@ export async function buildFunnel(days = 30): Promise<FunnelReport> {
     t.chips += d.chips;
     t.clarifications += d.clarifications;
     t.t_first_cards.push(...d.t_first_cards);
+    const ti = t.invest;
+    const di = d.invest;
+    ti.requested += di.requested;
+    ti.started += di.started;
+    ti.answered += di.answered;
+    ti.skipped += di.skipped;
+    ti.failed += di.failed;
+    ti.quota += di.quota;
+    ti.cancelled += di.cancelled;
+    ti.cost_usd += di.cost_usd;
+    ti.t_done.push(...di.t_done);
   }
   return report;
 }

@@ -684,7 +684,7 @@ export interface SessionResponse {
 export interface StreamRequest {
   session_id: string;
   query?: string;
-  /** "comprar" | "alquilar" | "invertir" | "lotes" (chips de clarificación y selector en sesión). */
+  /** "comprar" | "alquilar" | "lotes" | "investment" (chips de clarificación y selector en sesión; "invertir" cae en compra). */
   vertical_override?: string;
   /** Default 20. */
   limit?: number;
@@ -844,4 +844,129 @@ export interface TrackEventBody {
   event_type: P2EventType;
   /** ≤ 4 KB. */
   payload: Record<string, unknown>;
+}
+
+/* ------------------------------------------------------------------ */
+/* Análisis de inversión — POST /search/invest (P2 01/11, contrato §9) */
+/* `docs/HANDOFF_P2_INVEST_2026-11-01.md` §3. SSE con CRLF, como el    */
+/* stream. Orden: plan → step* → picks → [comparison] → answer_chunk* → */
+/* done | skip | error. Es OTRO canal: no trae `cards` ni               */
+/* `response_chunk`. Las claves van en inglés (`reason`, no `motivo`).  */
+/* ------------------------------------------------------------------ */
+
+/** `simple` nunca llega como plan: es `skip`. */
+export type InvestQuestionType = "seleccion" | "comparacion" | "zona" | "propiedad";
+
+export interface InvestRequest {
+  /** Texto crudo del usuario, ≤ 500 caracteres. */
+  query: string;
+  vertical: "invertir";
+  /** Solo correlación de eventos: el análisis no lee ni escribe la sesión. */
+  session_id: string | null;
+}
+
+export interface InvestPlanStep {
+  index: number;
+  label: string;
+}
+
+export interface InvestPlanEvent {
+  analysis_id: string;
+  question_type: InvestQuestionType | string;
+  /** Los pasos a pintar, en orden; con resúmenes de zona hay uno más ("Resumen de N zonas"). */
+  steps: InvestPlanStep[];
+  /** Supuesto del plan para el usuario, ya filtrado de vocabulario; null si no asumió nada. */
+  note: string | null;
+  /** Lo que P2 corrigió (diagnóstico, forma libre): no se muestra, viaja en la analítica. */
+  adjustments: unknown;
+}
+
+export interface InvestStepEvent {
+  index: number;
+  status: "running" | "done" | "failed";
+  label: string;
+  total_matches: number | null;
+  ms: number;
+  /** Solo en `done`: el criterio público aplicado (body válido de /search/structured). */
+  params?: StructuredParams | null;
+  /** Solo en `done`: avisos con rentabilidad estimada en el universo entero. */
+  with_yield?: number | null;
+  /** Solo en `failed`. */
+  error?: string | null;
+}
+
+/** Card completa (la misma del evento `cards`) + el motivo del LLM, ≤ 140 caracteres. */
+export interface InvestPick extends Card {
+  reason: string | null;
+}
+
+export interface InvestPicksEvent {
+  /** 3 a 6, el mejor primero; con menos candidatos llegan los que hay. */
+  cards: InvestPick[];
+}
+
+export interface InvestComparisonRaw {
+  label: string;
+  total_matches: number;
+  with_yield: number;
+  yield_median_pct: number | null;
+  yield_p25_pct: number | null;
+  yield_p75_pct: number | null;
+  valuation_gap_median_pct: number | null;
+  zone_trend: ZoneTrend | null;
+  zone_trend_pct: number | null;
+  zone_cap_pct: number | null;
+}
+
+/** `columns` y `rows` vienen en lenguaje de usuario, listas para dibujar; `raw` es para gráficos. */
+export interface InvestComparisonEvent {
+  columns: string[];
+  rows: string[][];
+  raw?: InvestComparisonRaw[] | null;
+}
+
+/** Una oración validada por chunk; cada una termina en espacio: se concatenan tal cual. */
+export interface InvestAnswerChunkEvent {
+  text: string;
+}
+
+export interface InvestUsage {
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+}
+
+export interface InvestDoneEvent {
+  analysis_id: string;
+  /** true = se venció `INVEST_TIMEOUT_S` (45 s): lo que llegó es válido. */
+  partial: boolean;
+  latency_ms: number;
+  latency_detail_ms?: Record<string, number> | null;
+  steps: InvestStepEvent[];
+  question_type: InvestQuestionType | string;
+  model: string | null;
+  plan_model?: string | null;
+  prompt_versions?: Record<string, string> | null;
+  usage: InvestUsage | null;
+  /** Estimación por tabla de precios. */
+  cost_usd: number | null;
+  /** `llm` · `llm_truncated` · `partial` · `fallback` (oración fija, sin prosa del LLM). */
+  narrative: "llm" | "llm_truncated" | "partial" | "fallback" | string;
+  candidates?: number | null;
+  /** Oraciones que la guardia descartó, con el motivo (diagnóstico). */
+  dropped?: unknown;
+}
+
+/** El análisis no agrega nada: P1 no muestra panel y no reintenta. */
+export interface InvestSkipEvent {
+  analysis_id: string;
+  reason: "simple" | "plan_timeout" | "plan_unparseable" | string;
+}
+
+/** HTTP 200 como en /search/stream; `llm_unavailable` (503) · `llm_error` (502). */
+export interface InvestErrorEvent {
+  code: string;
+  status?: number;
+  message: string;
 }

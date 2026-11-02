@@ -79,6 +79,28 @@ export const EVENTS = {
   MAP_FEED: "map_feed_loaded",
   /** Página SEO zona × tipo × operación vista. */
   LANDING_VIEWED: "landing_viewed",
+  /* ---- Análisis de inversión (02/11 — `docs/DECISION_2026-11-02_analisis-inversion.md`) ---- */
+  /** Se pidió el análisis a /api/invest/analysis (solo Invertir, envío explícito). */
+  INVEST_REQUESTED: "invest_analysis_requested",
+  /** Llegó `plan`: el panel aparece (analysis_id, tipo de pregunta, pasos). */
+  INVEST_STARTED: "invest_analysis_started",
+  /** Un paso terminó (o falló): total y avisos con rentabilidad. */
+  INVEST_STEP: "invest_analysis_step",
+  /** Llegó `done`: latencias, `usage`, costo estimado, picks, parcial o no. */
+  INVEST_ANSWERED: "invest_analysis_answered",
+  /** `skip` de P2 (pregunta simple) o canal apagado: sin panel. */
+  INVEST_SKIPPED: "invest_analysis_skipped",
+  /** HTTP o `error` del SSE. */
+  INVEST_FAILED: "invest_analysis_failed",
+  /** 60 s del cliente sin `done`. */
+  INVEST_TIMEOUT: "invest_analysis_timeout",
+  /** 429 de P1 (cupo por visitante / tope diario) o de P2 (por minuto, concurrencia, diario). */
+  INVEST_QUOTA: "invest_analysis_quota_reached",
+  /** El usuario buscó otra cosa (o cambió de vertical) con el análisis en curso: se cerró el SSE. */
+  INVEST_CANCELLED: "invest_analysis_cancelled",
+  INVEST_PANEL_TOGGLED: "invest_panel_toggled",
+  /** "ver avisos" de un paso del plan. */
+  INVEST_STEP_CLICK: "invest_step_clicked",
 } as const;
 
 export type EventType = (typeof EVENTS)[keyof typeof EVENTS];
@@ -146,6 +168,16 @@ function stableId(storage: () => Storage, key: string): string {
 
 const visitorId = () => stableId(() => window.localStorage, "pf_visitor");
 const tabId = () => stableId(() => window.sessionStorage, "pf_tab");
+
+/**
+ * Id estable del visitante (el mismo de los eventos). El análisis de inversión
+ * lo manda al server de P1, que lo reenvía a P2 como `X-Visitor-Id`: así el
+ * freno por minuto de P2 es por visitante y no un balde global para todo el
+ * sitio (P2 solo ve la IP del server de P1).
+ */
+export function getVisitorId(): string {
+  return visitorId();
+}
 
 export function trackEvent(eventType: EventType, payload: Record<string, unknown> = {}): void {
   try {

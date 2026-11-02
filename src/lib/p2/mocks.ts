@@ -36,6 +36,8 @@ import type {
   ComparablesPool,
   DealRating,
   HardFilter,
+  InvestRequest,
+  InvestSkipEvent,
   MapPin,
   MapSearchRequest,
   MapSearchResponse,
@@ -178,7 +180,7 @@ export function interpretQuery(query: string, verticalOverride?: string): MockIn
   const override = (verticalOverride ?? "").toLowerCase();
   if (override) {
     if (/alquilar|affittare/.test(override)) vertical = "rent";
-    else if (/invertir|investire/.test(override)) vertical = "investment";
+    else if (/invertir|investire|investment/.test(override)) vertical = "investment";
     else if (/comprar|comprare/.test(override)) vertical = "sale";
     else if (/lote|terreno/.test(override)) vertical = "land";
   }
@@ -255,7 +257,7 @@ function mergeRefinement(prev: MockIntent, query: string, verticalOverride?: str
     const o = verticalOverride.toLowerCase();
     if (/alquilar/.test(o)) next.vertical = "rent";
     else if (/comprar/.test(o)) next.vertical = "sale";
-    else if (/invertir/.test(o)) next.vertical = "investment";
+    else if (/invertir|investment/.test(o)) next.vertical = "investment";
     else if (/lote/.test(o)) {
       next.vertical = "land";
       next.tipo = "land";
@@ -1462,7 +1464,7 @@ export async function mockCreateSession(): Promise<SessionResponse> {
 const VERTICAL_LABEL: Record<Vertical, string> = {
   sale: "Compra",
   rent: "Alquiler",
-  investment: "Compra",
+  investment: "Compra para inversión",
   temporary_rent: "Alquiler temporario",
   land: "Lotes en venta",
 };
@@ -1868,4 +1870,26 @@ export async function mockGetProperty(id: string): Promise<PropertyDetailRespons
   const kind = m[1] as IdKind;
   const card = mockCard(n, kind, {});
   return detailFromCard(card, n);
+}
+
+/* ------------------------------------------------------------------ */
+/* Análisis de inversión (02/11) — fallback técnico, NO para probar     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * `POST /search/invest` sin P2: responde `skip` (pregunta simple) para que
+ * Invertir funcione como siempre y P1 no rompa. El panel completo (plan,
+ * pasos, picks, prosa) solo se ve contra P2 real (German, 03/10: prohibido
+ * probar con mocks).
+ */
+export function mockSearchInvest(body: InvestRequest): Response {
+  const skip: InvestSkipEvent = { analysis_id: crypto.randomUUID(), reason: "simple" };
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      await sleep(body.query ? 300 : 0);
+      controller.enqueue(sseChunk("skip", skip));
+      controller.close();
+    },
+  });
+  return sseResponse(stream);
 }

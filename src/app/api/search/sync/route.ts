@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { searchSync } from "@/lib/p2/client";
 import type { StreamRequest } from "@/lib/p2/types";
 import { badRequest, errorResponse, readJsonBody } from "@/lib/api-helpers";
-import { composeQuery } from "@/lib/server/compose-query";
+import { prepareTurn, type TurnPlan } from "@/lib/server/compose-query";
 import { isVerticalId } from "@/lib/vertical";
 
 /**
@@ -15,16 +15,18 @@ import { isVerticalId } from "@/lib/vertical";
  */
 export async function POST(req: Request) {
   const body = await readJsonBody<StreamRequest & { vertical?: string }>(req);
-  let query = body?.query?.trim();
+  const query = body?.query?.trim();
   if (!body?.session_id || !query) return badRequest("Faltan session_id y query.");
+  // Invertir (02/11): `prepareTurn` siembra el texto y devuelve el override de
+  // inversión; el turno sync sin `query` lo acepta P2 (verificado 02/11).
+  let turn: TurnPlan = { query, ...(body.vertical_override ? { vertical_override: body.vertical_override } : {}) };
   if (isVerticalId(body.vertical) && !body.vertical_override) {
-    query = await composeQuery(query, body.vertical);
+    turn = await prepareTurn(body.session_id, query, body.vertical);
   }
   try {
     const data = await searchSync({
       session_id: body.session_id,
-      query,
-      ...(body.vertical_override ? { vertical_override: body.vertical_override } : {}),
+      ...turn,
       limit: typeof body.limit === "number" ? body.limit : 20,
       offset: 0,
     });

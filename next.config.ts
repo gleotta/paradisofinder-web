@@ -24,6 +24,15 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
+  async redirects() {
+    return [
+      // El MCP de P2 armaba el link del detalle como `/dettaglio/<id>` (404 en
+      // producción hasta el 01/11). P2 ya lo corrigió a `/propiedad/<id>`; esto
+      // queda para los clientes (Claude.ai, ChatGPT) que lo tengan cacheado.
+      // La query (`?utm_source=mcp`) se conserva.
+      { source: "/dettaglio/:id", destination: "/propiedad/:id", permanent: true },
+    ];
+  },
 };
 
 export default nextConfig;

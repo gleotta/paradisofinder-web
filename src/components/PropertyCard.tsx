@@ -62,6 +62,8 @@ function PropertyCardBase({
   searchId = null,
   rank = null,
   vertical = null,
+  origin,
+  reason = null,
 }: {
   card: Card;
   similar?: boolean;
@@ -71,13 +73,18 @@ function PropertyCardBase({
   rank?: number | null;
   /** Vertical vigente: decide el layout (junto con el aviso) y viaja al detalle. */
   vertical?: string | null;
+  /** Origen para la analítica cuando no es el listado ni "relacionadas" (`invest_pick`). */
+  origin?: CardOrigin;
+  /** Análisis de inversión (02/11): el motivo del pick, texto de P2 tal cual ("Por qué"). */
+  reason?: string | null;
 }) {
   const [photoFailed, setPhotoFailed] = useState(false);
   const [allChips, setAllChips] = useState(false);
   // El detalle abre en pestaña NUEVA (decisión 05/09) y hereda el contexto de
   // la búsqueda por la URL (`?s=&r=&v=`); el click se registra acá, en la
   // pestaña que conoce la consulta, el ranking y el score.
-  const from: CardOrigin = similar ? "related" : "list";
+  const from: CardOrigin = origin ?? (similar ? "related" : "list");
+  const why = clean(reason);
   const href = detailHref(card.id, { searchId, rank, from, vertical });
   const onOpen = () => trackCardClick(card, from, rank);
   const layout = cardVertical(card, vertical);
@@ -182,6 +189,13 @@ function PropertyCardBase({
         <p className="pcard-address" title={address ?? undefined}>
           {address || " "}
         </p>
+
+        {why && (
+          <p className="pcard-reason" data-testid="pick-reason">
+            <span className="pcard-reason-k">Por qué</span>
+            {why}
+          </p>
+        )}
 
         {position && (
           <PositionBlock

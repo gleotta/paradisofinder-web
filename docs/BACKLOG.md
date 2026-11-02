@@ -261,6 +261,26 @@ P3 calcula, P2 expone, P1 muestra. **Para retomar:** respuesta a 1 y 2, y
 medir antes en la DB local cuánta cobertura tendría cada opción por zona
 (como en B1).
 
+**Estado al 01/11.** German pidió trabajarlo: la búsqueda de inversión como
+agente (varias consultas a P2, respuesta en prosa + las propiedades más
+acordes). Propuesta completa, con la cobertura medida contra P2 local (874 de
+2.345 ventas con rentabilidad, solo en Capital, Rivadavia, Santa Lucía y
+Rawson; cero en las otras 15 zonas) y el hallazgo de que `vertical:
+"investment"` SÍ funciona por `/search/structured`:
+`docs/PLAN_2026-11-01_invertir-agente-mcp.md`. **Decisión de German (01/11,
+tarde): la inteligencia vive en el core.** P2 planifica, consulta y redacta
+(pipeline en tres pasos, solo Invertir y solo si la pregunta lo pide); P1
+muestra, espera y limita el costo (plan §4). Pedido a P2 en borrador:
+`docs/PEDIDO_P1_A_P2_2026-11-01_analisis-inversion.md`.
+
+**Estado al 02/11: entregado por P2 e integrado en P1.** Handoff de P2
+(`docs/HANDOFF_P2_INVEST_2026-11-01.md`): `POST /search/invest` desplegado en
+el Docker local (Railway con el próximo deploy de P2). P1: route handler
+`/api/invest/analysis` con interruptor, cupos, caché y ledger de costo; panel
+"Lectura de FINDER · inversión"; eventos y tabla en `/interno/embudo`; prueba
+`tests/e2e/invertir-analisis.spec.ts`. Decisiones asumidas (D1-D5) y lo que
+queda para German en `docs/DECISION_2026-11-02_analisis-inversion.md` §2 y §4.
+
 ---
 
 ## B10. Inversiones por MCP — agregado el 2026-10-31
@@ -290,6 +310,20 @@ indicadores.
 
 **Para retomar:** el redirect de `/dettaglio` se puede hacer ya; las tools
 nuevas, con B9 definido.
+
+**Estado al 01/11.** Va junto con B9 en
+`docs/PLAN_2026-11-01_invertir-agente-mcp.md` §4: requisitos vigentes de los
+conectores de Claude.ai y ChatGPT y el camino decidido: ampliar el `/mcp` de
+P2 con las mismas funciones del pipeline (pedido §2); P1 solo redirige
+`/dettaglio` y mide.
+
+**Estado al 02/11.** P2 entregó las tools (`finder_invest_search`,
+`finder_zone_summary`, `finder_compare`, `finder_similar`, `search`/`fetch`),
+el link del detalle ya es `/propiedad/<id>?utm_source=mcp` y
+`finder_invest_analysis` queda apagada hasta tener OAuth (handoff §6). P1:
+redirección permanente (308) `/dettaglio/:id → /propiedad/:id` en `next.config.ts`.
+Pendiente: probar los conectores contra el P2 desplegado y asentar
+`utm_source` en `property_detail_opened`.
 
 ---
 

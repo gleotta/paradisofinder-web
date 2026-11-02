@@ -241,4 +241,32 @@ if (P2) {
   console.log("  (sin SMOKE_P2_BASE_URL: no se cruzó total_matches con P2)");
 }
 
+/* ---- 6. análisis de inversión (02/11): sonda simple → `skip` sin pagar el paso 3 ---- */
+{
+  let r;
+  try {
+    r = await fetch(`${base}/api/invest/analysis`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      body: JSON.stringify({ query: "departamentos para invertir en Capital", visitor_id: "smoke" }),
+      signal: AbortSignal.timeout(30_000),
+    });
+  } catch (e) {
+    fail(`POST /api/invest/analysis no respondió: ${errName(e)}`);
+  }
+  if (r.status === 204) {
+    // Apagado por INVEST_ANALYSIS_ENABLED o el P2 de este entorno todavía sin /search/invest.
+    console.log(`  (análisis de inversión sin servicio acá: X-Invest=${r.headers.get("x-invest") ?? "?"} — Invertir funciona como siempre)`);
+  } else if (r.status === 429) {
+    console.log("  (análisis de inversión con cupo agotado en este momento: 429, no se verifica el SSE)");
+  } else if (!r.ok) {
+    fail(`POST /api/invest/analysis → HTTP ${r.status}`);
+  } else {
+    const text = (await r.text()).replace(/\r\n/g, "\n");
+    const first = /^event:\s*(\S+)/m.exec(text)?.[1];
+    if (first !== "skip" && first !== "plan") fail(`/api/invest/analysis: primer evento "${first ?? "ninguno"}" (se esperaba skip o plan)`);
+    ok(`análisis de inversión: sonda simple → ${first}${r.headers.get("x-invest-cache") === "hit" ? " (caché)" : ""}`);
+  }
+}
+
 console.log("smoke P1: OK");

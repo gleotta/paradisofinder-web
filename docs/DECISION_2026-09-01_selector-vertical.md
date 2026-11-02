@@ -1,5 +1,9 @@
 # Decisión 2026-09-01 — Selector de vertical en el buscador
 
+> **Actualización 02/11:** Invertir dejó de ser "Compra ordenada por rentabilidad"
+> vía frase y pasó a la vertical `investment` de P2 (`vertical_override`; en sesión
+> nueva, siembra sync + override). Ver `docs/DECISION_2026-11-02_analisis-inversion.md` §6.
+
 **Decisión de German (01/09).** El buscador suma un selector segmentado
 **Alquilar · Comprar · Invertir** (opción A de la propuesta gráfica del 01/09):
 en la home arriba del campo de texto, y compacto dentro de la barra sticky de

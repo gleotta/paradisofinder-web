@@ -3315,3 +3315,314 @@ img {
   max-width: 720px;
   margin: 0 auto;
 }
+
+/* ======================= Lectura de FINDER · inversión (02/11) ======================= */
+/* Panel del análisis de inversión (docs/DECISION_2026-11-02_analisis-inversion.md):
+   arriba del listado, solo en Invertir y solo desde que P2 manda `plan`. Mismo
+   lenguaje que el resumen (blanco, borde magenta) con los pasos como lista, la
+   tabla de comparación, la prosa y la "Selección de FINDER" en la grilla de cards. */
+
+.invest-panel {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--magenta);
+  border-radius: var(--radius);
+  margin-top: 16px;
+  overflow: hidden;
+}
+
+.invest-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 18px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  color: var(--ink);
+  font: inherit;
+}
+
+.invest-head:hover {
+  background: var(--lilac);
+}
+
+.invest-title {
+  font-family: var(--display);
+  font-size: 18px;
+  color: var(--purple-deep);
+  flex: 1;
+  min-width: 0;
+}
+
+.invest-status {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.invest-panel--done .invest-status {
+  color: var(--sig-green-ink);
+}
+
+.invest-panel--error .invest-status,
+.invest-panel--quota .invest-status,
+.invest-panel--timeout .invest-status {
+  color: var(--sig-yellow-ink);
+}
+
+.invest-chevron {
+  color: var(--purple);
+  font-size: 14px;
+}
+
+.invest-body {
+  padding: 2px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.invest-note {
+  margin: 0;
+  font-size: 14px;
+  color: var(--purple-deep);
+  background: var(--lilac);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+
+.invest-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.invest-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14.5px;
+  line-height: 1.45;
+}
+
+.invest-step-mark {
+  flex: 0 0 18px;
+  width: 18px;
+  text-align: center;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.invest-step--done .invest-step-mark {
+  color: var(--sig-green-dot);
+}
+
+.invest-step--failed .invest-step-mark {
+  color: var(--sig-yellow-dot);
+}
+
+.invest-step--pending {
+  color: var(--muted);
+}
+
+.invest-step-label {
+  font-weight: 600;
+}
+
+.invest-step-meta {
+  color: var(--muted);
+}
+
+.invest-step-link {
+  font-size: 13.5px;
+  white-space: nowrap;
+}
+
+.invest-wait {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+
+/* Cartel de espera (antes de `plan`): la misma fila, con el texto en tinta
+   para que se lea como mensaje y no como nota al pie. */
+.invest-waiting {
+  align-items: flex-start;
+  color: var(--ink);
+  line-height: 1.45;
+}
+
+.invest-waiting .spinner--inline {
+  flex: 0 0 auto;
+  margin-top: 3px;
+}
+
+.invest-notice {
+  margin: 0;
+  background: var(--sig-yellow-bg);
+  color: var(--sig-yellow-ink);
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.invest-notice small {
+  color: inherit;
+  opacity: 0.85;
+}
+
+.invest-answer {
+  margin: 0;
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+.invest-compare-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.invest-compare {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.invest-compare th,
+.invest-compare td {
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+
+.invest-compare thead th {
+  background: var(--lilac);
+  color: var(--purple-deep);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.invest-compare tbody th {
+  font-weight: 600;
+  color: var(--purple-deep);
+}
+
+.invest-compare tbody tr:last-child th,
+.invest-compare tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.invest-picks-title {
+  font-family: var(--display);
+  font-size: 19px;
+  color: var(--purple-deep);
+  margin: 6px 0 -8px;
+}
+
+.invest-picks {
+  margin-top: 10px;
+}
+
+/* "Por qué" del pick (texto de P2 tal cual), entre la dirección y los bloques. */
+.pcard-reason {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ink);
+  border-left: 3px solid var(--magenta);
+  padding: 4px 10px;
+  background: var(--lilac);
+  border-radius: 0 10px 10px 0;
+}
+
+.pcard-reason-k {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--purple);
+  margin-bottom: 1px;
+}
+
+@media (max-width: 760px) {
+  .invest-head {
+    padding: 11px 14px;
+    flex-wrap: wrap;
+  }
+
+  .invest-title {
+    font-size: 16.5px;
+    flex-basis: calc(100% - 30px);
+  }
+
+  .invest-status {
+    font-size: 12.5px;
+  }
+
+  .invest-body {
+    padding: 0 14px 14px;
+  }
+
+  /* Tabla apilada por fila: cada opción es un bloque con "rótulo: valor". */
+  .invest-compare,
+  .invest-compare thead,
+  .invest-compare tbody,
+  .invest-compare tr,
+  .invest-compare th,
+  .invest-compare td {
+    display: block;
+  }
+
+  .invest-compare thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .invest-compare tbody tr {
+    border-bottom: 1px solid var(--line);
+    padding: 6px 0;
+  }
+
+  .invest-compare tbody tr:last-child {
+    border-bottom: 0;
+  }
+
+  .invest-compare tbody th {
+    padding: 6px 10px 2px;
+    border-bottom: 0;
+  }
+
+  .invest-compare td {
+    padding: 2px 10px;
+    border-bottom: 0;
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+  }
+
+  .invest-compare td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    flex: 0 1 55%;
+  }
+}

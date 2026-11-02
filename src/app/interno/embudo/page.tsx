@@ -27,6 +27,34 @@ function ms(v: number | null): string {
   return v == null ? "—" : `${fmtInt(v)} ms`;
 }
 
+function usd(v: number): string {
+  return `US$ ${v.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/** Fila del tablero de análisis de inversión (02/11). */
+function InvestRow({ d, label }: { d: DayFunnel; label?: string }) {
+  const i = d.invest;
+  return (
+    <tr>
+      <td>{label ?? d.day}</td>
+      <td>{fmtInt(i.requested)}</td>
+      <td>
+        {fmtInt(i.started)} <span className="pct">{pct(i.started, i.requested)}</span>
+      </td>
+      <td>
+        {fmtInt(i.answered)} <span className="pct">{pct(i.answered, i.started)}</span>
+      </td>
+      <td>{fmtInt(i.skipped)}</td>
+      <td>{fmtInt(i.cancelled)}</td>
+      <td>{fmtInt(i.failed)}</td>
+      <td>{fmtInt(i.quota)}</td>
+      <td>{ms(percentile(i.t_done, 50))}</td>
+      <td>{ms(percentile(i.t_done, 95))}</td>
+      <td>{usd(i.cost_usd)}</td>
+    </tr>
+  );
+}
+
 function Row({ d, label }: { d: DayFunnel; label?: string }) {
   return (
     <tr>
@@ -155,6 +183,40 @@ export default async function FunnelPage({ searchParams }: { searchParams: Promi
                     </td>
                   </tr>
                 ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {t.invest.requested > 0 && (
+        <div className="funnel-wrap">
+          <h2 className="section-title">Análisis de inversión (Invertir)</h2>
+          <p className="section-note">
+            Pedido en cada búsqueda de Invertir; P2 responde <code>skip</code> cuando una búsqueda alcanza. El costo es el estimado por P2 (
+            <code>cost_usd</code> de <code>done</code>), asentado por el server de P1.
+          </p>
+          <table className="funnel-table" data-testid="invest-funnel">
+            <thead>
+              <tr>
+                <th>Día (UTC)</th>
+                <th>Pedidos</th>
+                <th>Con panel</th>
+                <th>Respondidos</th>
+                <th>Skip</th>
+                <th>Cancelados</th>
+                <th>Fallidos</th>
+                <th>Cupo</th>
+                <th>p50 done</th>
+                <th>p95 done</th>
+                <th>Costo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.days
+                .filter((d) => d.invest.requested > 0)
+                .map((d) => (
+                  <InvestRow d={d} key={d.day} />
+                ))}
+              <InvestRow d={t} label="Total" />
             </tbody>
           </table>
         </div>

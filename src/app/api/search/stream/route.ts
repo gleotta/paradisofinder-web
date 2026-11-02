@@ -1,7 +1,7 @@
 import { searchStream } from "@/lib/p2/client";
 import type { StreamRequest } from "@/lib/p2/types";
 import { badRequest, errorResponse, readJsonBody } from "@/lib/api-helpers";
-import { composeQuery } from "@/lib/server/compose-query";
+import { prepareTurn, type TurnPlan } from "@/lib/server/compose-query";
 import { isVerticalId } from "@/lib/vertical";
 
 /**
@@ -28,28 +28,32 @@ import { isVerticalId } from "@/lib/vertical";
  *
  * Selector de vertical (01/09 — `docs/DECISION_2026-09-01_selector-vertical.md`):
  * el cliente manda `vertical` ("alquilar"|"comprar"|"invertir"|"lotes") junto
- * a la query CRUDA, y acá se decide si se anexa la frase canónica. Jamás se
- * traduce a `vertical_override`: con `query` en sesión nueva el override pisa
- * el texto entero (verificado 01/09 contra P2 real — pierde zona y tipo).
+ * a la query CRUDA, y acá se decide si se anexa la frase canónica. Con `query`
+ * en sesión nueva el override pisa el texto entero (verificado 01/09 contra P2
+ * real — pierde zona y tipo); por eso Invertir (02/11: la vertical `investment`
+ * de P2) se resuelve en `prepareTurn`: siembra sync del texto y override.
  */
 export async function POST(req: Request) {
   const body = await readJsonBody<StreamRequest & { vertical?: string }>(req);
-  let query = body?.query?.trim();
+  const query = body?.query?.trim();
   if (!body?.session_id || (!query && typeof body.offset !== "number" && !body.vertical_override)) {
     return badRequest("Faltan session_id y query (turno) u offset (paginación).");
   }
 
   // El override (chips de clarificación / selector en sesión) excluye la
   // composición: ya es una respuesta explícita del usuario dentro de la sesión.
+  let turn: TurnPlan = {
+    ...(query ? { query } : {}),
+    ...(body.vertical_override ? { vertical_override: body.vertical_override } : {}),
+  };
   if (query && isVerticalId(body.vertical) && !body.vertical_override) {
-    query = await composeQuery(query, body.vertical);
+    turn = await prepareTurn(body.session_id, query, body.vertical);
   }
 
   try {
     const upstream = await searchStream({
       session_id: body.session_id,
-      ...(query ? { query } : {}),
-      ...(body.vertical_override ? { vertical_override: body.vertical_override } : {}),
+      ...turn,
       ...(typeof body.limit === "number" ? { limit: body.limit } : {}),
       ...(typeof body.offset === "number" ? { offset: body.offset } : {}),
     });

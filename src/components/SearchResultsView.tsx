@@ -29,6 +29,14 @@
  *  5. Scroll: páginas siguientes por el MISMO `/search/stream` con
  *     `{session_id, offset}` sin `query` — de a 10 hasta agotar
  *     `total_matches`, SIN tope (`docs/DECISION_2026-08-30_scroll-completo.md`).
+ *  6. Invertir (02/11 — `docs/DECISION_2026-11-02_analisis-inversion.md`): en
+ *     PARALELO al stream, el análisis de inversión (`/api/invest/analysis` →
+ *     P2 `/search/invest`) con el texto crudo del usuario. P2 decide si tiene
+ *     algo que agregar (`skip` en ~1,5 s para "departamentos en Capital"); si
+ *     manda `plan`, el panel "Lectura de FINDER · inversión" aparece arriba
+ *     del listado. Solo por envío explícito (texto nuevo, selector o chip de
+ *     aclaración a Invertir); quitar o editar un chip no re-analiza; una
+ *     búsqueda nueva o cambiar de vertical cierra el SSE (P2 deja de pagar).
  *
  * La sesión vive SOLO para esa búsqueda: los chips de clarificación
  * (`vertical_override`), las relajaciones, los chips de interpretación (T2:
@@ -65,11 +73,11 @@ import {
   isVerticalId,
   storeVertical,
   VERTICAL_OVERRIDE,
-  VERTICAL_PHRASE,
   verticalFromSummary,
   type VerticalId,
 } from "@/lib/vertical";
 import InterpretationChips, { type RefineMeta } from "./InterpretationChips";
+import InvestPanel, { useInvestAnalysis } from "./InvestPanel";
 import PropertyCard from "./PropertyCard";
 import ResultsMap from "./ResultsMap";
 import SearchSkeleton from "./SearchSkeleton";
@@ -83,7 +91,8 @@ const DEFAULT_CHIPS = ["Comprar", "Alquilar", "Invertir", "Lotes"];
 const OVERRIDE_BY_CHIP: Record<string, string> = {
   comprar: "comprar",
   alquilar: "alquilar",
-  invertir: "invertir",
+  // Invertir = la vertical `investment` de P2 (02/11); "invertir" cae en compra.
+  invertir: VERTICAL_OVERRIDE.invertir,
   lotes: "lotes",
 };
 /** Salida del bucle cuando ya eligió operación y P2 sigue sin señal. */
@@ -230,6 +239,10 @@ export default function SearchResultsView() {
   const timingRef = useRef<Timing | null>(null);
   /** true mientras la pestaña se descarga: un stream cortado por navegar no es un error. */
   const unloadingRef = useRef(false);
+  /** Análisis de inversión (Invertir): el segundo canal, en paralelo al stream. */
+  const invest = useInvestAnalysis();
+  const investStart = invest.start;
+  const investCancel = invest.cancel;
 
   useEffect(() => {
     const onHide = () => {
@@ -312,7 +325,10 @@ export default function SearchResultsView() {
       trackEvent(EVENTS.SEARCH_SUBMITTED, searchMeta);
 
       if (!opts?.keepSession) {
-        // Búsqueda nueva = sesión nueva: sin memoria de la anterior.
+        // Búsqueda nueva = sesión nueva: sin memoria de la anterior. El
+        // análisis de inversión en curso se cierra (el que corresponda a la
+        // consulta nueva lo dispara quien llama, si es Invertir).
+        investCancel();
         setResults(null);
         setMapPins(null);
         setMapTotalMatches(null);
@@ -465,6 +481,9 @@ export default function SearchResultsView() {
                 setVertical(detected);
                 if (detected) storeVertical(detected);
               }
+              // El análisis de inversión es SOLO de Invertir: si el texto mandó
+              // a otra vertical ("depto para alquilar" con Invertir elegido), se cierra.
+              if (detected !== "invertir") investCancel();
               // Los resultados YA están en pantalla: la búsqueda terminó para el
               // usuario. Esperar a que cierre el stream dejaba el spinner y el
               // botón bloqueados ~2 s de más mientras se escribía el resumen.
@@ -597,7 +616,7 @@ export default function SearchResultsView() {
     },
     // `clarification` se lee solo para el guard final; no debe recrear el callback.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [applyRelax],
+    [applyRelax, investCancel],
   );
 
   /**
@@ -743,13 +762,14 @@ export default function SearchResultsView() {
       if (q === urlQuery && vert === urlVertical) {
         processedQuery.current = null;
         void runSearch(q, { vertical: vert });
+        if (vert === "invertir") investStart(q, null);
       } else {
         const params = new URLSearchParams({ q });
         if (vert) params.set("v", vert);
         router.push(`/buscar?${params.toString()}`);
       }
     },
-    [router, runSearch, urlQuery, urlVertical],
+    [router, runSearch, urlQuery, urlVertical, investStart],
   );
 
   useEffect(() => {
@@ -762,8 +782,12 @@ export default function SearchResultsView() {
       verticalRef.current = urlVertical;
       setVertical(urlVertical);
       void runSearch(urlQuery, { vertical: urlVertical });
+      // Invertir: el análisis arranca en el mismo tick que la búsqueda, con el
+      // texto crudo (la frase canónica es cosa del stream). La sesión todavía
+      // no existe: la correlación va por `search_id` en el sobre de los eventos.
+      if (urlVertical === "invertir") investStart(urlQuery, null);
     }
-  }, [urlQuery, urlVertical, runSearch]);
+  }, [urlQuery, urlVertical, runSearch, investStart]);
 
   /**
    * Click en el selector: queda como preferencia y cambia la búsqueda vigente.
@@ -773,8 +797,8 @@ export default function SearchResultsView() {
    * el botón rebotaba a Alquilar y parecía roto (reporte de German 01/09).
    * Se resuelve DENTRO de la misma sesión para no perder el criterio
    * acumulado (zona, tipo, presupuesto — verificado contra P2 real):
-   * `vertical_override` para alquilar/comprar/lotes; para invertir, la frase
-   * como refinamiento (el override `invertir` de P2 cae en compra sin orden).
+   * `vertical_override` para las cuatro (Invertir = `investment`, la vertical
+   * de inversión de P2, desde el 02/11; antes iba por frase).
    * Lo tipeado sigue mandando al momento de buscar texto NUEVO.
    *
    * Sin resultados (o toggle-off del activo): búsqueda nueva — sin selección
@@ -789,11 +813,10 @@ export default function SearchResultsView() {
       if (!urlQuery) return;
 
       if (v && results && sessionRef.current) {
-        if (v === "invertir") {
-          void runSearch(VERTICAL_PHRASE.invertir, { keepSession: true, mode: "vertical" });
-        } else {
-          void runSearch(urlQuery, { override: VERTICAL_OVERRIDE[v], keepSession: true, mode: "vertical" });
-        }
+        void runSearch(urlQuery, { override: VERTICAL_OVERRIDE[v], keepSession: true, mode: "vertical" });
+        // Elegir Invertir con resultados en pantalla es pedir el análisis de la pregunta tipeada.
+        if (v === "invertir") investStart(urlQuery, sessionRef.current);
+        else investCancel();
         // La URL acompaña (link compartible / back reproducible) sin relanzar
         // el efecto: la clave ya se marca como procesada.
         processedQuery.current = runKey(urlQuery, v);
@@ -804,7 +827,7 @@ export default function SearchResultsView() {
 
       submitQuery(urlQuery, v);
     },
-    [results, router, runSearch, submitQuery, urlQuery],
+    [results, router, runSearch, submitQuery, urlQuery, investStart, investCancel],
   );
 
   /* ------- Scroll infinito (de a 10 hasta agotar el criterio, sin tope) ------- */
@@ -978,13 +1001,16 @@ export default function SearchResultsView() {
       const override = OVERRIDE_BY_CHIP[lower];
       if (override) {
         void runSearch(urlQuery, { override, keepSession: true, mode: "chip" });
+        // El chip "Invertir" de una aclaración es una elección explícita de vertical.
+        if (lower === "invertir") investStart(urlQuery, sessionRef.current);
+        else investCancel();
       } else {
         // Chips que no son vertical ("Viviendas", "Lotes"…): el texto del chip
         // es la respuesta, como refinamiento en la sesión.
         void runSearch(chip, { keepSession: true, mode: "chip" });
       }
     },
-    [runSearch, urlQuery],
+    [runSearch, urlQuery, investStart, investCancel],
   );
 
   /** Relajación (`few_results`): el `label` del chip va como query en la misma sesión (§3.3b). */
@@ -1019,9 +1045,10 @@ export default function SearchResultsView() {
       verticalRef.current = to;
       setVertical(to);
       storeVertical(to);
+      investCancel();
       void runSearch(urlQuery, { override: VERTICAL_OVERRIDE[to], keepSession: true, mode: "assumption" });
     },
-    [runSearch, urlQuery],
+    [runSearch, urlQuery, investCancel],
   );
 
   /* ---------------- Render ---------------- */
@@ -1045,6 +1072,7 @@ export default function SearchResultsView() {
       data-testid="results"
       data-first-cards-ms={firstCardsMs ?? undefined}
       data-state={showSkeleton ? "searching" : results ? "results" : clarification ? "clarification" : error ? "error" : "idle"}
+      data-invest={invest.state.phase}
     >
       <div className="results-col results-page">
         <form
@@ -1093,6 +1121,10 @@ export default function SearchResultsView() {
             </button>
           )}
         </div>
+
+        {/* Invertir (02/11): "Lectura de FINDER · inversión", arriba del listado.
+            Solo existe desde que P2 manda `plan`; el listado no lo espera. */}
+        <InvestPanel state={invest.state} searchId={results?.searchId ?? null} />
 
         {/* Espera larga (T1): sin cards a los 4 s → lo interpretado hasta ahora
             (la consulta) y el fallback sync de P2. */}
