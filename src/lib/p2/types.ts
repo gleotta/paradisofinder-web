@@ -322,6 +322,18 @@ export interface Card {
    * (P2 04/10). `true` o null, nunca `false`.
    */
   comparables_by_area_only?: boolean | null;
+  /**
+   * `true` = el aviso se ofrece solo en permuta (P3 migración 042, P2 16/11):
+   * `deal_rating: yellow` con el motivo `solo_permuta`, sin comparación, sin
+   * rentabilidad, sin similares y con puntaje ≤ 40. Null hasta el sync de P3.
+   */
+  exchange_only?: boolean | null;
+  /** Cuántos alquileres similares respaldan la renta estimada (5 a 30; 5 = el mínimo). */
+  rent_estimate_sample?: number | null;
+  /** De dónde salen esos alquileres: `zone` (en venta, siempre) · `adjacent_zones` · `macro_zone`. */
+  rent_estimate_scope?: "zone" | "adjacent_zones" | "macro_zone" | (string & {}) | null;
+  /** `true` = el aviso es a refaccionar y la renta es la de viviendas en condiciones. */
+  rent_estimate_condition_unadjusted?: boolean | null;
   /** Score de P3 (trazabilidad): NO se muestra. */
   p3_opportunity_score?: number | null;
 

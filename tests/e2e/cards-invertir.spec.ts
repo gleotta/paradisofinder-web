@@ -34,8 +34,9 @@ test.describe("cards · invertir · propias", () => {
       await expect(block).toHaveAttribute("data-tone", "neutral");
       expect(await block.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(NEUTRAL_BG);
       await expect(block.locator(".block-kicker")).toHaveText(/^Esta propiedad · estimación$/i);
+      // Con la muestra de P3 (P2 16/11) dice con cuántos alquileres se estimó; sin ella, la fija de siempre.
       await expect(block.locator(".estblock-note")).toHaveText(
-        "Según alquileres similares publicados en la zona. Rentabilidad = un año de ese alquiler ÷ precio de este aviso.",
+        /^Según (\d+ alquileres similares publicados (en la zona|en zonas vecinas|en la zona ampliada)( \(el mínimo con el que se estima\))?|alquileres similares publicados en la zona)\. Rentabilidad = un año de ese alquiler ÷ precio de este aviso\.( Es la renta de una vivienda en condiciones: esta hay que refaccionarla\.)?$/,
       );
       const lines = await block.locator(".estblock-yield, .estblock-rent").allInnerTexts();
       expect(lines.length).toBeGreaterThan(0);

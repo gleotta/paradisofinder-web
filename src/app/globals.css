@@ -2129,6 +2129,18 @@ img {
   font-weight: 700;
 }
 
+/* Salvedad de la renta estimada (P2 16/11): con qué se estimó; el indicador ocupa la fila */
+.ind:has(.n) {
+  grid-column: 1 / -1;
+}
+
+.ind .n {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
 .minicards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));

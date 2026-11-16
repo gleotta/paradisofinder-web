@@ -7,6 +7,7 @@ import {
   ATTRIBUTE_LABEL,
   CHIP_ORDER,
   CONDITION_CHIP_LABEL,
+  ESTIMATE_BLOCK_NOTE,
   LAND_SERVICE_LABEL,
   LAND_ZONING_LABEL,
   NEGOTIATION_DAYS,
@@ -393,7 +394,15 @@ function poolUnit(
 }
 
 /** Motivos de P2/P3 que explican por qué un aviso no tiene comparación de precio. */
-const NO_POSITION_CODES = new Set(["sin_superficie_cubierta", "pocos_comparables", "sin_comparables", "atipico", "sin_datos"]);
+const NO_POSITION_CODES = new Set([
+  "sin_superficie_cubierta",
+  "pocos_comparables",
+  "sin_comparables",
+  "atipico",
+  "sin_datos",
+  // P3 migración 042 (P2 16/11): "El aviso se ofrece solo en permuta: no se vende por dinero y el precio no se compara".
+  "solo_permuta",
+]);
 
 /**
  * Por qué la card no tiene bloque de posición (03/10, German: "hay cards que
@@ -706,14 +715,75 @@ export function zoneRefInfo(
   };
 }
 
+type RentEstimateCard = Pick<Card, "rent_estimate_sample" | "rent_estimate_scope" | "rent_estimate_condition_unadjusted">;
+
+/** Mínimo de alquileres similares con el que P3 estima la renta (P2 16/11). */
+export const RENT_ESTIMATE_MIN = 5;
+
+const RENT_SCOPE_WHERE: Record<string, string> = {
+  zone: "de la zona",
+  adjacent_zones: "de zonas vecinas",
+  macro_zone: "de la zona ampliada",
+};
+
+/**
+ * Con qué se estimó la renta (P3 migración 042, P2 16/11): "con 5 alquileres
+ * similares de la zona, el mínimo con el que se estima". null sin muestra.
+ */
+function rentEstimateSample(card: RentEstimateCard): string | null {
+  const n = card.rent_estimate_sample;
+  if (n == null || !Number.isFinite(n)) return null;
+  const where = RENT_SCOPE_WHERE[card.rent_estimate_scope ?? ""] ?? "de la zona";
+  return `con ${nf.format(n)} ${n === 1 ? "alquiler similar" : "alquileres similares"} ${where}${
+    n <= RENT_ESTIMATE_MIN ? ", el mínimo con el que se estima" : ""
+  }`;
+}
+
+const RENT_UNADJUSTED = "es la renta de una vivienda en condiciones y esta hay que refaccionarla";
+
+/**
+ * Salvedad de la renta estimada en el detalle, el texto que sugiere P2 (el
+ * del MCP): "La renta está estimada con 5 alquileres similares de la zona, el
+ * mínimo con el que se estima; no es un alquiler pactado; es la renta de una
+ * vivienda en condiciones y esta hay que refaccionarla." null sin ninguno de
+ * los dos datos (hasta el sync de P3 en Railway).
+ */
+export function rentEstimateNote(card: RentEstimateCard): string | null {
+  const sample = rentEstimateSample(card);
+  const unadjusted = card.rent_estimate_condition_unadjusted === true;
+  if (!sample && !unadjusted) return null;
+  const parts = [sample ? `La renta está estimada ${sample}` : "La renta está estimada", "no es un alquiler pactado"];
+  if (unadjusted) parts.push(RENT_UNADJUSTED);
+  return `${parts.join("; ")}.`;
+}
+
+/**
+ * Aclaración del bloque "Esta propiedad · estimación": la fija de siempre
+ * (`ESTIMATE_BLOCK_NOTE`) con la muestra cuando llega, y la salvedad de los
+ * avisos a refaccionar.
+ */
+export function estimateBlockNote(card: RentEstimateCard): string {
+  const n = card.rent_estimate_sample;
+  const where = (RENT_SCOPE_WHERE[card.rent_estimate_scope ?? ""] ?? "de la zona").replace(/^de /, "en ");
+  const base =
+    n != null && Number.isFinite(n)
+      ? `Según ${nf.format(n)} ${n === 1 ? "alquiler similar publicado" : "alquileres similares publicados"} ${where}${
+          n <= RENT_ESTIMATE_MIN ? " (el mínimo con el que se estima)" : ""
+        }. Rentabilidad = un año de ese alquiler ÷ precio de este aviso.`
+      : ESTIMATE_BLOCK_NOTE;
+  return card.rent_estimate_condition_unadjusted === true
+    ? `${base} Es la renta de una vivienda en condiciones: esta hay que refaccionarla.`
+    : base;
+}
+
 /** Bloque "Esta propiedad · estimación" (Invertir): las dos líneas, o null sin ninguno de los dos campos. */
 export function estimateInfo(
-  card: Pick<Card, "gross_yield_pct" | "estimated_monthly_rent">,
-): { yieldLine: string | null; rentLine: string | null } | null {
+  card: Pick<Card, "gross_yield_pct" | "estimated_monthly_rent"> & RentEstimateCard,
+): { yieldLine: string | null; rentLine: string | null; note: string } | null {
   const yieldLine = card.gross_yield_pct != null ? `Rentabilidad anual estimada ${fmtPctAbs(card.gross_yield_pct)}` : null;
   const rentLine =
     card.estimated_monthly_rent != null ? `Podría alquilarse a ≈ US$ ${nf.format(card.estimated_monthly_rent)}/mes` : null;
-  return yieldLine || rentLine ? { yieldLine, rentLine } : null;
+  return yieldLine || rentLine ? { yieldLine, rentLine, note: estimateBlockNote(card) } : null;
 }
 
 /**

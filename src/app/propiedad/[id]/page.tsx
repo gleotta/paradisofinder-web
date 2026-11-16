@@ -37,6 +37,7 @@ import {
   percentilePhrase,
   pickSimilars,
   positionMissingReason,
+  rentEstimateNote,
   positionPhrase,
   pricePerSqm,
   priceStrip,
@@ -283,6 +284,11 @@ export default async function PropertyPage({
                   <div className="ind" key={ind.label}>
                     <div className="k">{ind.label}</div>
                     <div className="v">{ind.value}</div>
+                    {ind.note && (
+                      <div className="n" data-testid="rent-estimate-note">
+                        {ind.note}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -300,7 +306,10 @@ export default async function PropertyPage({
               </p>
             )}
             {similars.all.length <= 1 ? (
-              <p className="section-note">Por ahora no hay avisos similares para mostrar de esta propiedad.</p>
+              // Sin conjunto, el motivo de P2/P3 si lo hay (p. ej. "solo permuta", 16/11), como en la card.
+              <p className="section-note">
+                {(!poolLead && positionMissingReason(p)) || "Por ahora no hay avisos similares para mostrar de esta propiedad."}
+              </p>
             ) : (
               <>
                 <p className="section-note similars-note">{similars.note}</p>
@@ -481,19 +490,26 @@ function ratingBlocks(
   return out;
 }
 
-function indicatorList(p: PropertyDetail): { label: string; value: string }[] {
+function indicatorList(p: PropertyDetail): { label: string; value: string; note?: string | null }[] {
   const isSale = p.operation === "sale";
   const isLand = p.property_type === "land";
-  const out: { label: string; value: string }[] = [];
+  const out: { label: string; value: string; note?: string | null }[] = [];
   // La misma frase de la card: el número con signo solo no dice para qué lado.
   const position = positionPhrase(p);
   if (position) out.push({ label: isLand ? "Precio del m² frente a la zona" : "Precio frente a similares", value: position });
   // Lenguaje de usuario (P2/P3 lo cambiaron el 30/09; acá era deuda de P1): sin "percentil" ni "renta bruta".
   const percentile = percentilePhrase(p.price_percentile);
   if (percentile) out.push({ label: "Posición entre similares", value: percentile });
-  if (isSale && !isLand && p.gross_yield_pct != null) out.push({ label: "Rentabilidad anual estimada", value: fmtPct(p.gross_yield_pct) });
+  // Con qué se estimó la renta (P2 16/11): debajo del primero de los dos que llegue.
+  const rentNote = isSale && !isLand ? rentEstimateNote(p) : null;
+  if (isSale && !isLand && p.gross_yield_pct != null)
+    out.push({ label: "Rentabilidad anual estimada", value: fmtPct(p.gross_yield_pct), note: rentNote });
   if (isSale && !isLand && p.estimated_monthly_rent != null)
-    out.push({ label: "Alquiler mensual estimado", value: `US$ ${fmtInt(p.estimated_monthly_rent)}` });
+    out.push({
+      label: "Alquiler mensual estimado",
+      value: `US$ ${fmtInt(p.estimated_monthly_rent)}`,
+      note: p.gross_yield_pct == null ? rentNote : null,
+    });
   // Alquiler: la referencia absoluta va acá, no en la card. En dólares, con
   // los pesos que convierte P2 cuando los manda.
   if (!isSale && p.estimated_monthly_rent != null)

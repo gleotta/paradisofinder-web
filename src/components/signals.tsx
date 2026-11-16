@@ -163,13 +163,13 @@ export function ZoneBlock({ info, full = false }: { info: ZoneRefInfo; full?: bo
 }
 
 /** Invertir: "Esta propiedad · estimación", siempre neutro. */
-export function EstimateBlock({ info }: { info: { yieldLine: string | null; rentLine: string | null } }) {
+export function EstimateBlock({ info }: { info: { yieldLine: string | null; rentLine: string | null; note?: string } }) {
   return (
     <div className="estblock" data-testid="estimate" data-tone="neutral">
       <span className="block-kicker">Esta propiedad · estimación</span>
       {info.yieldLine && <span className="estblock-yield">{info.yieldLine}</span>}
       {info.rentLine && <span className="estblock-rent">{info.rentLine}</span>}
-      <span className="estblock-note">{ESTIMATE_BLOCK_NOTE}</span>
+      <span className="estblock-note">{info.note ?? ESTIMATE_BLOCK_NOTE}</span>
     </div>
   );
 }
