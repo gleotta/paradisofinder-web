@@ -1,0 +1,541 @@
+{
+  "generated_at": "2026-09-14T11:44:08.500Z",
+  "base": "http://localhost:8000",
+  "min_listings": 5,
+  "total_candidates": 133,
+  "published": 72,
+  "entries": [
+    {
+      "slug": "propiedades-en-venta-en-capital-san-juan",
+      "count": 1057
+    },
+    {
+      "slug": "casas-en-venta-en-capital-san-juan",
+      "count": 625
+    },
+    {
+      "slug": "propiedades-en-venta-en-rivadavia-san-juan",
+      "count": 492
+    },
+    {
+      "slug": "lotes-en-venta-en-rawson-san-juan",
+      "count": 488
+    },
+    {
+      "slug": "lotes-en-venta-en-santa-lucia-san-juan",
+      "count": 441
+    },
+    {
+      "slug": "departamentos-en-venta-en-capital-san-juan",
+      "count": 432
+    },
+    {
+      "slug": "lotes-en-venta-en-pocito-san-juan",
+      "count": 374
+    },
+    {
+      "slug": "casas-en-venta-en-rivadavia-san-juan",
+      "count": 330
+    },
+    {
+      "slug": "propiedades-en-alquiler-en-capital-san-juan",
+      "count": 310
+    },
+    {
+      "slug": "propiedades-en-venta-en-santa-lucia-san-juan",
+      "count": 291
+    },
+    {
+      "slug": "lotes-en-venta-en-rivadavia-san-juan",
+      "count": 284
+    },
+    {
+      "slug": "propiedades-en-venta-en-rawson-san-juan",
+      "count": 251
+    },
+    {
+      "slug": "departamentos-en-alquiler-en-capital-san-juan",
+      "count": 249
+    },
+    {
+      "slug": "casas-en-venta-en-santa-lucia-san-juan",
+      "count": 232
+    },
+    {
+      "slug": "lotes-en-venta-en-capital-san-juan",
+      "count": 221
+    },
+    {
+      "slug": "casas-en-venta-en-rawson-san-juan",
+      "count": 206
+    },
+    {
+      "slug": "departamentos-en-venta-en-rivadavia-san-juan",
+      "count": 162
+    },
+    {
+      "slug": "propiedades-en-venta-en-pocito-san-juan",
+      "count": 131
+    },
+    {
+      "slug": "casas-en-venta-en-pocito-san-juan",
+      "count": 128
+    },
+    {
+      "slug": "propiedades-en-alquiler-en-rivadavia-san-juan",
+      "count": 128
+    },
+    {
+      "slug": "lotes-en-venta-en-albardon-san-juan",
+      "count": 124
+    },
+    {
+      "slug": "lotes-en-venta-en-chimbas-san-juan",
+      "count": 114
+    },
+    {
+      "slug": "propiedades-en-venta-en-chimbas-san-juan",
+      "count": 109
+    },
+    {
+      "slug": "casas-en-venta-en-chimbas-san-juan",
+      "count": 96
+    },
+    {
+      "slug": "lotes-en-venta-en-zonda-san-juan",
+      "count": 86
+    },
+    {
+      "slug": "departamentos-en-alquiler-en-rivadavia-san-juan",
+      "count": 84
+    },
+    {
+      "slug": "casas-en-alquiler-en-capital-san-juan",
+      "count": 61
+    },
+    {
+      "slug": "departamentos-en-venta-en-santa-lucia-san-juan",
+      "count": 59
+    },
+    {
+      "slug": "propiedades-en-alquiler-en-santa-lucia-san-juan",
+      "count": 56
+    },
+    {
+      "slug": "departamentos-en-venta-en-rawson-san-juan",
+      "count": 44
+    },
+    {
+      "slug": "casas-en-alquiler-en-rivadavia-san-juan",
+      "count": 44
+    },
+    {
+      "slug": "propiedades-en-alquiler-en-rawson-san-juan",
+      "count": 42
+    },
+    {
+      "slug": "casas-en-venta-en-zonda-san-juan",
+      "count": 39
+    },
+    {
+      "slug": "propiedades-en-venta-en-zonda-san-juan",
+      "count": 39
+    },
+    {
+      "slug": "lotes-en-venta-en-9-de-julio-san-juan",
+      "count": 31
+    },
+    {
+      "slug": "lotes-en-venta-en-ullum-san-juan",
+      "count": 31
+    },
+    {
+      "slug": "lotes-en-venta-en-calingasta-san-juan",
+      "count": 31
+    },
+    {
+      "slug": "lotes-en-venta-en-caucete-san-juan",
+      "count": 30
+    },
+    {
+      "slug": "casas-en-alquiler-en-santa-lucia-san-juan",
+      "count": 29
+    },
+    {
+      "slug": "propiedades-en-venta-en-albardon-san-juan",
+      "count": 29
+    },
+    {
+      "slug": "casas-en-venta-en-albardon-san-juan",
+      "count": 28
+    },
+    {
+      "slug": "departamentos-en-alquiler-en-santa-lucia-san-juan",
+      "count": 27
+    },
+    {
+      "slug": "lotes-en-venta-en-valle-fertil-san-juan",
+      "count": 27
+    },
+    {
+      "slug": "propiedades-en-venta-en-caucete-san-juan",
+      "count": 27
+    },
+    {
+      "slug": "lotes-en-venta-en-iglesia-san-juan",
+      "count": 26
+    },
+    {
+      "slug": "casas-en-venta-en-caucete-san-juan",
+      "count": 25
+    },
+    {
+      "slug": "casas-en-alquiler-en-rawson-san-juan",
+      "count": 25
+    },
+    {
+      "slug": "propiedades-en-venta-en-ullum-san-juan",
+      "count": 24
+    },
+    {
+      "slug": "casas-en-venta-en-ullum-san-juan",
+      "count": 23
+    },
+    {
+      "slug": "lotes-en-venta-en-san-martin-san-juan",
+      "count": 20
+    },
+    {
+      "slug": "lotes-en-venta-en-angaco-san-juan",
+      "count": 19
+    },
+    {
+      "slug": "propiedades-en-venta-en-iglesia-san-juan",
+      "count": 18
+    },
+    {
+      "slug": "propiedades-en-alquiler-en-chimbas-san-juan",
+      "count": 18
+    },
+    {
+      "slug": "departamentos-en-alquiler-en-rawson-san-juan",
+      "count": 17
+    },
+    {
+      "slug": "casas-en-venta-en-iglesia-san-juan",
+      "count": 17
+    },
+    {
+      "slug": "departamentos-en-alquiler-en-chimbas-san-juan",
+      "count": 14
+    },
+    {
+      "slug": "lotes-en-venta-en-sarmiento-san-juan",
+      "count": 14
+    },
+    {
+      "slug": "departamentos-en-venta-en-chimbas-san-juan",
+      "count": 13
+    },
+    {
+      "slug": "lotes-en-venta-en-jachal-san-juan",
+      "count": 13
+    },
+    {
+      "slug": "propiedades-en-alquiler-en-pocito-san-juan",
+      "count": 12
+    },
+    {
+      "slug": "propiedades-en-venta-en-9-de-julio-san-juan",
+      "count": 10
+    },
+    {
+      "slug": "propiedades-en-venta-en-calingasta-san-juan",
+      "count": 10
+    },
+    {
+      "slug": "casas-en-venta-en-9-de-julio-san-juan",
+      "count": 9
+    },
+    {
+      "slug": "casas-en-venta-en-calingasta-san-juan",
+      "count": 9
+    },
+    {
+      "slug": "casas-en-alquiler-en-pocito-san-juan",
+      "count": 9
+    },
+    {
+      "slug": "propiedades-en-alquiler-en-albardon-san-juan",
+      "count": 9
+    },
+    {
+      "slug": "casas-en-venta-en-valle-fertil-san-juan",
+      "count": 8
+    },
+    {
+      "slug": "propiedades-en-venta-en-valle-fertil-san-juan",
+      "count": 8
+    },
+    {
+      "slug": "casas-en-alquiler-en-albardon-san-juan",
+      "count": 6
+    },
+    {
+      "slug": "propiedades-en-alquiler-en-caucete-san-juan",
+      "count": 6
+    },
+    {
+      "slug": "casas-en-alquiler-en-caucete-san-juan",
+      "count": 5
+    },
+    {
+      "slug": "propiedades-en-venta-en-sarmiento-san-juan",
+      "count": 5
+    },
+    {
+      "slug": "casas-en-venta-en-sarmiento-san-juan",
+      "count": 4
+    },
+    {
+      "slug": "casas-en-venta-en-jachal-san-juan",
+      "count": 4
+    },
+    {
+      "slug": "casas-en-alquiler-en-chimbas-san-juan",
+      "count": 4
+    },
+    {
+      "slug": "lotes-en-venta-en-25-de-mayo-san-juan",
+      "count": 4
+    },
+    {
+      "slug": "propiedades-en-venta-en-jachal-san-juan",
+      "count": 4
+    },
+    {
+      "slug": "departamentos-en-alquiler-en-pocito-san-juan",
+      "count": 3
+    },
+    {
+      "slug": "departamentos-en-alquiler-en-albardon-san-juan",
+      "count": 3
+    },
+    {
+      "slug": "propiedades-en-alquiler-en-zonda-san-juan",
+      "count": 3
+    },
+    {
+      "slug": "departamentos-en-venta-en-pocito-san-juan",
+      "count": 2
+    },
+    {
+      "slug": "departamentos-en-venta-en-caucete-san-juan",
+      "count": 2
+    },
+    {
+      "slug": "casas-en-venta-en-angaco-san-juan",
+      "count": 2
+    },
+    {
+      "slug": "casas-en-venta-en-san-martin-san-juan",
+      "count": 2
+    },
+    {
+      "slug": "casas-en-venta-en-25-de-mayo-san-juan",
+      "count": 2
+    },
+    {
+      "slug": "casas-en-alquiler-en-zonda-san-juan",
+      "count": 2
+    },
+    {
+      "slug": "casas-en-alquiler-en-calingasta-san-juan",
+      "count": 2
+    },
+    {
+      "slug": "casas-en-alquiler-en-valle-fertil-san-juan",
+      "count": 2
+    },
+    {
+      "slug": "propiedades-en-venta-en-angaco-san-juan",
+      "count": 2
+    },
+    {
+      "slug": "propiedades-en-venta-en-san-martin-san-juan",
+      "count": 2
+    },
+    {
+      "slug": "propiedades-en-venta-en-25-de-mayo-san-juan",
+      "count": 2
+    },
+    {
+      "slug": "propiedades-en-alquiler-en-calingasta-san-juan",
+      "count": 2
+    },
+    {
+      "slug": "propiedades-en-alquiler-en-valle-fertil-san-juan",
+      "count": 2
+    },
+    {
+      "slug": "departamentos-en-venta-en-albardon-san-juan",
+      "count": 1
+    },
+    {
+      "slug": "departamentos-en-venta-en-9-de-julio-san-juan",
+      "count": 1
+    },
+    {
+      "slug": "departamentos-en-venta-en-sarmiento-san-juan",
+      "count": 1
+    },
+    {
+      "slug": "departamentos-en-venta-en-ullum-san-juan",
+      "count": 1
+    },
+    {
+      "slug": "departamentos-en-venta-en-calingasta-san-juan",
+      "count": 1
+    },
+    {
+      "slug": "departamentos-en-venta-en-iglesia-san-juan",
+      "count": 1
+    },
+    {
+      "slug": "departamentos-en-alquiler-en-9-de-julio-san-juan",
+      "count": 1
+    },
+    {
+      "slug": "departamentos-en-alquiler-en-caucete-san-juan",
+      "count": 1
+    },
+    {
+      "slug": "departamentos-en-alquiler-en-zonda-san-juan",
+      "count": 1
+    },
+    {
+      "slug": "casas-en-alquiler-en-iglesia-san-juan",
+      "count": 1
+    },
+    {
+      "slug": "casas-en-alquiler-en-jachal-san-juan",
+      "count": 1
+    },
+    {
+      "slug": "propiedades-en-alquiler-en-9-de-julio-san-juan",
+      "count": 1
+    },
+    {
+      "slug": "propiedades-en-alquiler-en-iglesia-san-juan",
+      "count": 1
+    },
+    {
+      "slug": "propiedades-en-alquiler-en-jachal-san-juan",
+      "count": 1
+    },
+    {
+      "slug": "departamentos-en-venta-en-angaco-san-juan",
+      "count": 0
+    },
+    {
+      "slug": "departamentos-en-venta-en-san-martin-san-juan",
+      "count": 0
+    },
+    {
+      "slug": "departamentos-en-venta-en-25-de-mayo-san-juan",
+      "count": 0
+    },
+    {
+      "slug": "departamentos-en-venta-en-zonda-san-juan",
+      "count": 0
+    },
+    {
+      "slug": "departamentos-en-venta-en-jachal-san-juan",
+      "count": 0
+    },
+    {
+      "slug": "departamentos-en-venta-en-valle-fertil-san-juan",
+      "count": 0
+    },
+    {
+      "slug": "departamentos-en-alquiler-en-angaco-san-juan",
+      "count": 0
+    },
+    {
+      "slug": "departamentos-en-alquiler-en-san-martin-san-juan",
+      "count": 0
+    },
+    {
+      "slug": "departamentos-en-alquiler-en-25-de-mayo-san-juan",
+      "count": 0
+    },
+    {
+      "slug": "departamentos-en-alquiler-en-sarmiento-san-juan",
+      "count": 0
+    },
+    {
+      "slug": "departamentos-en-alquiler-en-ullum-san-juan",
+      "count": 0
+    },
+    {
+      "slug": "departamentos-en-alquiler-en-calingasta-san-juan",
+      "count": 0
+    },
+    {
+      "slug": "departamentos-en-alquiler-en-iglesia-san-juan",
+      "count": 0
+    },
+    {
+      "slug": "departamentos-en-alquiler-en-jachal-san-juan",
+      "count": 0
+    },
+    {
+      "slug": "departamentos-en-alquiler-en-valle-fertil-san-juan",
+      "count": 0
+    },
+    {
+      "slug": "casas-en-alquiler-en-angaco-san-juan",
+      "count": 0
+    },
+    {
+      "slug": "casas-en-alquiler-en-san-martin-san-juan",
+      "count": 0
+    },
+    {
+      "slug": "casas-en-alquiler-en-9-de-julio-san-juan",
+      "count": 0
+    },
+    {
+      "slug": "casas-en-alquiler-en-25-de-mayo-san-juan",
+      "count": 0
+    },
+    {
+      "slug": "casas-en-alquiler-en-sarmiento-san-juan",
+      "count": 0
+    },
+    {
+      "slug": "casas-en-alquiler-en-ullum-san-juan",
+      "count": 0
+    },
+    {
+      "slug": "propiedades-en-alquiler-en-angaco-san-juan",
+      "count": 0
+    },
+    {
+      "slug": "propiedades-en-alquiler-en-san-martin-san-juan",
+      "count": 0
+    },
+    {
+      "slug": "propiedades-en-alquiler-en-25-de-mayo-san-juan",
+      "count": 0
+    },
+    {
+      "slug": "propiedades-en-alquiler-en-sarmiento-san-juan",
+      "count": 0
+    },
+    {
+      "slug": "propiedades-en-alquiler-en-ullum-san-juan",
+      "count": 0
+    }
+  ]
+}

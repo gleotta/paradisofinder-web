@@ -13,6 +13,12 @@ if [ "$(id -u)" = "0" ]; then
       echo "[entrypoint] No pude preparar EVENTS_LOG_DIR=$EVENTS_LOG_DIR; los eventos saldrán por stdout." >&2
     fi
   fi
+  # Caché en disco (15/09): snapshot del sitemap y og:image propias.
+  if [ -n "${CACHE_DIR:-}" ]; then
+    if ! mkdir -p "$CACHE_DIR" || ! chown -R nextjs:nodejs "$CACHE_DIR"; then
+      echo "[entrypoint] No pude preparar CACHE_DIR=$CACHE_DIR; la caché queda solo en memoria." >&2
+    fi
+  fi
   exec su-exec nextjs "$@"
 fi
 

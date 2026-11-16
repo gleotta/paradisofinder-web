@@ -1,0 +1,4 @@
+#!/bin/bash
+# paradisofinder.com — P1: hook versionado (core.hooksPath=scripts/git-hooks).
+# Instalar/desinstalar: ./scripts/ci/install_hooks.sh [--uninstall]
+exec "$(git rev-parse --show-toplevel)/scripts/ci/hook_dispatch.sh" commit

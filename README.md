@@ -9,7 +9,8 @@ dos registros de decisión que revierten cosas de esos documentos:
 El primer MVP (beta, analítica propia, botón de publicar, detalle en pestaña nueva,
 galería completa) está en `docs/DECISION_2026-09-05_mvp-beta.md`. Para correrla en Docker
 (instalar, construir, operar, leer logs): `docs/DOCKER.md`; para el deploy en Railway:
-`docs/DEPLOY_RAILWAY.md`.
+`docs/DEPLOY_RAILWAY.md`; el CI/CD local por hooks de git (`develop` → Docker del :3000,
+`stage` → Railway): `docs/CI_CD.md`.
 
 Hay dos formas de correr P1 en esta máquina, y usan el mismo puerto (3000), así que no
 conviven:
@@ -50,6 +51,8 @@ cliente (y el número de WhatsApp se lee por request, sin rebuild).
 | `CONTACT_WHATSAPP` | vacío → sin botón | Número (solo dígitos, con código de país, ej. `5492645550000`) del botón **"Publicá tu propiedad"** para inmobiliarias/dueños. Vacío = el botón no se muestra. |
 | `CONTACT_WHATSAPP_TEXT` | "Hola, quiero publicar…" | Texto prellenado del mensaje de WhatsApp. |
 | `EVENTS_LOG_DIR` | `logs` | Directorio del **log propio de eventos** (`events-YYYY-MM-DD.jsonl`, fecha UTC). Vacío = solo stdout. Ver **Analítica de uso**. |
+| `SITE_URL` | `https://paradisofinder.com` | Origen público (14/09): canonical, Open Graph, `sitemap.xml` y el link del detalle en el mensaje de WhatsApp de **"Consultar"**. En local: `http://localhost:3000`. |
+| `METRICS_TOKEN` | vacío | Acceso al tablero interno de embudo `/interno/embudo?token=…` (14/09). Vacío = el tablero solo existe fuera de producción. |
 
 El `.env.local` de esta máquina **ya viene apuntado al P2 real**. Ojo con `.env.example`:
 dice puerto 8001 (instancia de prueba), la instancia real es la **8000**.
@@ -197,6 +200,8 @@ se eliminó de P1 el 30/08: `related` viene resuelto (`docs/CAMBIOS_P2_PARA_P1_2
 | `Dockerfile` + `docker-entrypoint.sh` + `.dockerignore` | Imagen standalone no-root (`docs/DOCKER.md`): volumen `/data` para el log, healthcheck `/api/health` |
 | `docker-compose.yml` | Correr esa imagen en local contra el P2 del Docker (puerto 3000, volumen `pfw-data`) |
 | `railway.json` | Deploy en Railway (`docs/DEPLOY_RAILWAY.md`): builder Dockerfile, healthcheck, restart |
+| `scripts/git-hooks/` + `scripts/ci/` | CI/CD local por hooks versionados (`docs/CI_CD.md`): `develop` → guardias + rebuild del :3000; push a `stage` → gate bloqueante, artefacto verificado y smoke del stage de Railway |
+| `scripts/actualizar_3000.sh` · `scripts/deploy_verify.sh` · `scripts/ci/smoke.mjs` | Rebuild del Docker local con smoke · verificación de la imagen en un contenedor aislado (:3002) · el smoke común (health, `P2_MODE=live`, SSE real, cruce de `total_matches` con P2) |
 | `src/proxy.ts` + `next.config.ts` | Hardening HTTP: CSP con nonce por request, HSTS, nosniff, X-Frame-Options, Permissions-Policy |
 | `src/app/api/health/` | Healthcheck (`?deep=1` sondea P2) |
 | `src/components/PublishCta.tsx` + `src/lib/server/contact.ts` | Botón "Publicá tu propiedad" (WhatsApp, `CONTACT_WHATSAPP`) |
@@ -258,12 +263,34 @@ jq -c 'select(.event=="card_clicked") | [.search_id,.payload.rank,.payload.score
 ## Deploy en Railway (Docker)
 
 Runbook completo en `docs/DEPLOY_RAILWAY.md`. Resumen: Railway construye el `Dockerfile`
-(Next `output: "standalone"`, usuario no-root, `HOSTNAME=::` dual-stack, `P2_MODE=live`),
-lee `railway.json` (healthcheck `/api/health`, restart on failure) y las variables van en
-el dashboard: `P2_BASE_URL` (red privada `http://<p2>.railway.internal:8000` — P2 debe
-escuchar en `::`), `P2_API_KEY`, `CONTACT_WHATSAPP`. Montar un volumen en `/data` para que
-el log de eventos sobreviva a los deploys; se lee con `railway ssh -- cat /data/logs/*.jsonl`.
-La imagen es la misma que corre `docker compose up -d` en local (`docs/DOCKER.md`).
+(Next `output: "standalone"`, usuario no-root, `HOSTNAME=::` dual-stack, `P2_MODE=live`)
+desde la rama **`stage`** (integración de GitHub), lee `railway.json` (healthcheck
+`/api/health`, restart on failure) y las variables van en el dashboard: `P2_BASE_URL`
+(`http://paradisofinder-core.railway.internal:8000`, la red privada de Railway, que en entornos
+creados después del 16/10/2025 es IPv4 + IPv6, así que el `--host 0.0.0.0` de P2 alcanza;
+plan B la URL pública `https://paradisofinder-core-staging.up.railway.app`),
+`P2_API_KEY` (la `PORTAL_API_KEY` del stage de P2), `CONTACT_WHATSAPP`. Montar un volumen en
+`/data` para que el log de eventos sobreviva a los deploys; se lee con
+`railway ssh -- cat /data/logs/*.jsonl`. La imagen es la misma que corre
+`docker compose up -d` en local (`docs/DOCKER.md`). El handoff de P2 con lo que ya está
+de su lado: `docs/HANDOFF_P2_CICD_2026-09-05.md`.
+
+## CI/CD local (hooks de git)
+
+`docs/CI_CD.md`. Se enchufa una vez con `./scripts/ci/install_hooks.sh` (apunta
+`core.hooksPath` a `scripts/git-hooks/`, versionado) y de ahí en más:
+
+| evento | qué pasa |
+|---|---|
+| commit / merge / push en `develop` | lint + tsc + `next build` (~16 s) y, si dan verde, `docker compose up -d --build` del :3000 con espera de healthy y smoke. En segundo plano; avisa por notificación. |
+| commit en `stage` | las mismas guardias, feedback nomás |
+| push a `stage` | **gate bloqueante** (las guardias: si dan rojo el push no sale; `--no-verify` lo saltea) → Railway promueve desde GitHub → en local se verifica la misma imagen de un worktree limpio del commit (`scripts/deploy_verify.sh`, :3002) y se hace el smoke contra la URL de stage hasta que sirva ese commit |
+
+El smoke (`scripts/ci/smoke.mjs`) falla ante degradación silenciosa: exige `P2_MODE=live`,
+que P1 llegue a P2, una búsqueda real por sesión + SSE con cards que no sean las de `/mocks`
+y el mismo `total_matches` que P2 ("casas en rawson" → 180). Estado y logs:
+`./scripts/ci/cd_status.sh`; todo vive en `.ci/` (gitignored). Falta cargar en `.ci/config`
+la `STAGE_BASE_URL` del stage de P1 cuando exista el servicio en Railway.
 
 ## Consultas para probar (contra P2 real)
 
@@ -273,3 +300,36 @@ hasta el final, la última página trae 2 cards + 10 "similares" y el cierre del
 `departamento en jachal` (0 resultados → acciones para relajar el criterio + bloque
 "Podrían interesarte") · `algo lindo` (clarificación con chips) · `comprar hola`
 (P2 sigue sin señal → P1 pide un dato concreto en vez de repetir los chips).
+
+
+## Pruebas de interfaz (Playwright, 14/09)
+
+Una suite por tarea del cierre del QA (`tests/e2e/t1-streaming` … `t7-metrics`) más los
+bloques F y G de la batería. Corren contra un P1 **ya levantado** (Docker `:3000`, `npm run dev`
+o el stage) usando el Google Chrome del sistema; mobile (380 px) primero.
+
+```bash
+npm run test:e2e                                  # contra http://localhost:3000
+BASE_URL=http://localhost:3001 npm run test:e2e   # contra otro P1
+npx playwright test t1 --project=mobile           # una suite, un proyecto
+```
+
+Pasan con P2 real y con mocks (`P2_MODE=mock`). `t1` mide el tiempo al primer estado visible
+(< 500 ms) y lo que cuesta pintar las cards después del evento (< 200 ms). Reporte HTML en
+`tests/e2e/.report/` (gitignored).
+
+## Páginas SEO zona × tipo × operación (14/09)
+
+`/<departamentos|casas|lotes|propiedades>-en-<venta|alquiler>-en-<zona>-san-juan`. Qué
+combinaciones existen (≥ 5 avisos) lo decide `src/data/seo-catalog.json`, que se regenera
+contra P2 con:
+
+```bash
+npm run seo:catalog                                       # P2 local
+P2_BASE_URL=https://… P2_API_KEY=… npm run seo:catalog    # producción (30 búsquedas/min: ~5 min)
+```
+
+Cada página pide sus cards y el conteo real al servirse (cache 6 h; si P2 no responde, sirve
+el conteo del catálogo sin cards). Después de un deploy, precalentar el cache al ritmo del rate
+limit de P2: `npm run seo:warm -- https://paradisofinder.com`. `robots.txt` y `sitemap.xml` se
+generan solos (`src/app/robots.ts`, `src/app/sitemap.ts`).

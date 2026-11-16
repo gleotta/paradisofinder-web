@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { p2Health, p2Mode, p2Target } from "@/lib/p2/client";
+import { investEnabled } from "@/lib/server/invest";
 
 /**
  * Healthcheck de P1 (Railway lo consulta al deployar — `railway.json`).
@@ -17,6 +18,8 @@ export async function GET(req: Request) {
     version: process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) ?? process.env.APP_VERSION ?? "dev",
     p2_mode: p2Mode(),
     p2_target: p2Target(),
+    /** Análisis de inversión (02/11): el interruptor `INVEST_ANALYSIS_ENABLED` de este entorno. */
+    invest_analysis: investEnabled(),
     ...(deep ? { p2: await p2Health() } : {}),
   };
   return NextResponse.json(body, { headers: { "Cache-Control": "no-store" } });

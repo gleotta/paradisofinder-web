@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * Observabilidad de P1 (MVP beta, 05/09 — `docs/DECISION_2026-09-05_mvp-beta.md`).
+ * Observabilidad de P1 (MVP beta, 05/09 — `docs/DECISION_2026-09-05_mvp-beta.md`;
+ * embudo del 14/09 — `docs/DECISION_2026-09-14_qa-produccion.md` T7).
  *
  * Toda interacción emite un evento a POST /api/events (server de P1), que
  *  1. lo escribe en el log propio de P1 (`logs/events-YYYY-MM-DD.jsonl`, una
@@ -18,6 +19,8 @@
  *    que P2 registra por su cuenta (`search_executed`, `detail_viewed`).
  *  - search_id: `<session_id>.<turno>` — una corrida de búsqueda. Viaja en el
  *    link del detalle (`?s=`) para que la pestaña nueva herede el contexto.
+ *  - vertical y query de la búsqueda vigente: van en el SOBRE de cada evento
+ *    (T7: "todos con session_id, vertical y posición"), no hay que repetirlos.
  * Nada de esto puede romper ni demorar la UI.
  */
 
@@ -27,29 +30,77 @@ import { sessionFromSearchId, type CardOrigin } from "./tracking-ids";
 export { detailHref, searchIdFor, sessionFromSearchId, type CardOrigin } from "./tracking-ids";
 
 export const EVENTS = {
+  /** T7: el usuario mandó una consulta (antes de la red) — la base del embudo. */
+  SEARCH_SUBMITTED: "search_submitted",
+  /** Turno enviado a P2 (con sesión). */
   SEARCH: "search_performed",
   /** Las cards del turno: total, scores y ranking — el "resultado" de la consulta. */
   SEARCH_RESULTS: "search_results",
+  /** T7: primeras cards pintadas, con `t_first_cards` medido en el cliente. */
+  CARDS_RENDERED: "cards_rendered",
   SEARCH_ERROR: "search_error",
+  SEARCH_SLOW: "search_slow_wait",
+  SEARCH_FALLBACK: "search_fallback_sync",
+  SESSION_RETRY: "session_retried",
   ZERO_RESULTS: "zero_results",
   CLARIFICATION_SHOWN: "clarification_shown",
-  CLARIFICATION_CHIP: "clarification_chip_selected",
+  /** T7: elección en una aclaración (chip de vertical o relajación `few_results`). */
+  CLARIFICATION_CHOICE: "clarification_choice",
+  /** Alias histórico (05/09): mismo evento que CLARIFICATION_CHOICE. */
+  CLARIFICATION_CHIP: "clarification_choice",
+  /** T2/T7: chips de interpretación. */
+  CHIP_REMOVED: "chip_removed",
+  CHIP_EDITED: "chip_edited",
+  ORDER_CHANGED: "order_changed",
+  ASSUMPTION_FLIPPED: "assumption_flipped",
   OPPORTUNITY_CHIP: "opportunity_chip_toggled",
   VERTICAL_SELECTED: "vertical_selected",
   VERTICAL_RESYNC: "vertical_resynced",
   EXAMPLE_CLICK: "example_query_clicked",
   PAGE_LOADED: "results_page_loaded",
   RELATED_SHOWN: "related_shown",
-  /** Click en una card (listado, similares, popup del mapa o comparable). */
-  CARD_CLICK: "card_clicked",
+  /** T7: click en una card (listado, similares, popup del mapa o comparable) — antes `card_clicked`. */
+  CARD_CLICK: "card_opened",
   DETAIL_OPENED: "property_detail_opened",
+  /** T4: botón "Consultar" (WhatsApp/tel de la inmobiliaria o de FINDER). */
   CONTACT_CLICK: "contact_click",
+  /** Link secundario "Ver aviso original". */
   SOURCE_CLICK: "source_click",
+  /** 15/09: botón "Compartir" de la card o del detalle (`method`: native | copy). */
+  SHARE_CLICK: "share_click",
+  /** 15/09: link "Abrir en Google Maps" del mapa del detalle. */
+  DETAIL_MAP_EXTERNAL: "detail_map_external_click",
+  /** 01/10: "Mostrar los N restantes" en los avisos similares del detalle (alquiler puede pasar de 30). */
+  COMPARABLES_EXPANDED: "comparables_expanded",
   /** Botón "Publicá tu propiedad" (WhatsApp para inmobiliarias/dueños). */
   PUBLISH_CONTACT: "publish_contact_click",
   MAP_TOGGLED: "map_toggled",
   MAP_MARKER_CLICK: "map_marker_click",
   MAP_FEED: "map_feed_loaded",
+  /** Página SEO zona × tipo × operación vista. */
+  LANDING_VIEWED: "landing_viewed",
+  /* ---- Análisis de inversión (02/11 — `docs/DECISION_2026-11-02_analisis-inversion.md`) ---- */
+  /** Se pidió el análisis a /api/invest/analysis (solo Invertir, envío explícito). */
+  INVEST_REQUESTED: "invest_analysis_requested",
+  /** Llegó `plan`: el panel aparece (analysis_id, tipo de pregunta, pasos). */
+  INVEST_STARTED: "invest_analysis_started",
+  /** Un paso terminó (o falló): total y avisos con rentabilidad. */
+  INVEST_STEP: "invest_analysis_step",
+  /** Llegó `done`: latencias, `usage`, costo estimado, picks, parcial o no. */
+  INVEST_ANSWERED: "invest_analysis_answered",
+  /** `skip` de P2 (pregunta simple) o canal apagado: sin panel. */
+  INVEST_SKIPPED: "invest_analysis_skipped",
+  /** HTTP o `error` del SSE. */
+  INVEST_FAILED: "invest_analysis_failed",
+  /** 60 s del cliente sin `done`. */
+  INVEST_TIMEOUT: "invest_analysis_timeout",
+  /** 429 de P1 (cupo por visitante / tope diario) o de P2 (por minuto, concurrencia, diario). */
+  INVEST_QUOTA: "invest_analysis_quota_reached",
+  /** El usuario buscó otra cosa (o cambió de vertical) con el análisis en curso: se cerró el SSE. */
+  INVEST_CANCELLED: "invest_analysis_cancelled",
+  INVEST_PANEL_TOGGLED: "invest_panel_toggled",
+  /** "ver avisos" de un paso del plan. */
+  INVEST_STEP_CLICK: "invest_step_clicked",
 } as const;
 
 export type EventType = (typeof EVENTS)[keyof typeof EVENTS];
@@ -62,22 +113,39 @@ export interface ClientEvent {
   tab_id: string;
   session_id: string | null;
   search_id: string | null;
+  /** Vertical vigente del selector/summary (T7). */
+  vertical: string | null;
+  /** Consulta vigente (texto tal cual lo mandó el usuario). */
+  query: string | null;
   page: string;
   ts: string;
 }
 
 let sessionId: string | null = null;
 let searchId: string | null = null;
+let currentVertical: string | null = null;
+let currentQuery: string | null = null;
 
-/** Búsqueda en curso: sesión de P2 + id de la corrida (turno). */
-export function setTrackingSearch(session: string | null, search: string | null) {
+/** Búsqueda en curso: sesión de P2 + id de la corrida (turno) + contexto. */
+export function setTrackingSearch(
+  session: string | null,
+  search: string | null,
+  ctx?: { vertical?: string | null; query?: string | null },
+) {
   sessionId = session;
   searchId = search;
+  if (ctx && "vertical" in ctx) currentVertical = ctx.vertical ?? null;
+  if (ctx && "query" in ctx) currentQuery = ctx.query ?? null;
 }
 
-/** La pestaña de detalle hereda el contexto del `?s=` del link. */
-export function adoptTrackingSearch(search: string | null) {
-  setTrackingSearch(sessionFromSearchId(search), search);
+/** Vertical vigente (el selector cambia sin búsqueda; el summary la re-sincroniza). */
+export function setTrackingVertical(vertical: string | null) {
+  currentVertical = vertical;
+}
+
+/** La pestaña de detalle hereda el contexto del `?s=` (y `?v=`) del link. */
+export function adoptTrackingSearch(search: string | null, vertical?: string | null) {
+  setTrackingSearch(sessionFromSearchId(search), search, { vertical: vertical ?? null });
 }
 
 export function currentSearchId(): string | null {
@@ -101,6 +169,16 @@ function stableId(storage: () => Storage, key: string): string {
 const visitorId = () => stableId(() => window.localStorage, "pf_visitor");
 const tabId = () => stableId(() => window.sessionStorage, "pf_tab");
 
+/**
+ * Id estable del visitante (el mismo de los eventos). El análisis de inversión
+ * lo manda al server de P1, que lo reenvía a P2 como `X-Visitor-Id`: así el
+ * freno por minuto de P2 es por visitante y no un balde global para todo el
+ * sitio (P2 solo ve la IP del server de P1).
+ */
+export function getVisitorId(): string {
+  return visitorId();
+}
+
 export function trackEvent(eventType: EventType, payload: Record<string, unknown> = {}): void {
   try {
     const body: ClientEvent = {
@@ -110,6 +188,8 @@ export function trackEvent(eventType: EventType, payload: Record<string, unknown
       tab_id: tabId(),
       session_id: sessionId,
       search_id: searchId,
+      vertical: currentVertical,
+      query: currentQuery,
       page: window.location.pathname,
       ts: new Date().toISOString(),
     };
@@ -152,11 +232,19 @@ export function scoreStats(cards: Pick<Card, "opportunity_score">[]) {
   };
 }
 
-export function trackCardClick(card: Pick<Card, "id" | "opportunity_score">, from: CardOrigin, rank: number | null) {
+export function trackCardClick(
+  card: Pick<Card, "id" | "opportunity_score">,
+  from: CardOrigin,
+  rank: number | null,
+  /** "similars" = entró por "ver similares" (29/09): abre el detalle en sus comparables. */
+  target?: "similars",
+) {
   trackEvent(EVENTS.CARD_CLICK, {
     property_id: card.id,
     rank,
+    position: rank,
     score: card.opportunity_score,
     from,
+    ...(target ? { target } : {}),
   });
 }

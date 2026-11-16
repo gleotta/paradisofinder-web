@@ -21,6 +21,9 @@ export interface LoggedEvent {
   tab_id: string | null;
   session_id: string | null;
   search_id: string | null;
+  /** Vertical y consulta vigentes (T7, 14/09): en el sobre, no en el payload. */
+  vertical?: string | null;
+  query?: string | null;
   page: string | null;
   payload: Record<string, unknown>;
   client_ts: string | null;

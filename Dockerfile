@@ -16,8 +16,8 @@ RUN npm ci --no-audit --no-fund
 FROM base AS build
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# `public/` está vacío en el repo (git no versiona directorios vacíos) y el COPY
-# de abajo lo exige.
+# `public/` hoy solo trae los íconos del manifest (`public/icons/`); el mkdir queda
+# por si se vacía (git no versiona directorios vacíos), porque el COPY de abajo lo exige.
 RUN mkdir -p public && npm run build
 
 # ---- runner: mínimo, no-root, healthcheck ----
@@ -34,14 +34,16 @@ ENV NODE_ENV=production \
     # En producción NUNCA degradar a mocks en silencio: si P2 no responde, error visible.
     P2_MODE=live \
     # Log de eventos en el volumen (/data). Sin volumen, cae a stdout con un warning.
-    EVENTS_LOG_DIR=/data/logs
+    EVENTS_LOG_DIR=/data/logs \
+    # Caché en disco (15/09): snapshot de propiedades del sitemap y og:image propias.
+    CACHE_DIR=/data/cache
 
 # su-exec: el entrypoint arranca como root solo para dejar el volumen escribible
 # y baja a `nextjs` antes de ejecutar el server.
 RUN apk add --no-cache su-exec \
  && addgroup -S -g 1001 nodejs \
  && adduser -S -u 1001 -G nodejs -h /app nextjs \
- && mkdir -p /data/logs \
+ && mkdir -p /data/logs /data/cache \
  && chown -R nextjs:nodejs /app /data
 
 COPY --from=build --chown=nextjs:nodejs /app/public ./public

@@ -1,0 +1,3 @@
+#!/bin/bash
+# paradisofinder.com — P1: hook versionado. El stdin (refs que se pushean) se hereda.
+exec "$(git rev-parse --show-toplevel)/scripts/ci/hook_pre_push.sh" "$@"

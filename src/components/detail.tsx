@@ -4,9 +4,12 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import type { ContactInfo, Publisher, Source } from "@/lib/p2/types";
+import type { Card, Source } from "@/lib/p2/types";
 import { PUBLISHER_LABEL } from "@/lib/labels";
+import { clean } from "@/lib/format";
 import { adoptTrackingSearch, detailHref, EVENTS, trackCardClick, trackEvent, type CardOrigin } from "@/lib/track";
+import ContactButton from "./ContactButton";
+import ShareButton from "./ShareButton";
 
 /**
  * Emite "apertura de detalle" una vez por visita (cubre entradas directas por
@@ -20,17 +23,19 @@ export function DetailTracker({
   searchId,
   rank,
   from,
+  vertical = null,
 }: {
   propertyId: string;
   searchId: string | null;
   rank: number | null;
   from: CardOrigin | null;
+  vertical?: string | null;
 }) {
   // En dev, StrictMode monta dos veces y duplicaba el evento: se emite una vez
   // por propiedad (el ref sobrevive al remount simulado).
   const firedFor = useRef<string | null>(null);
   useEffect(() => {
-    adoptTrackingSearch(searchId);
+    adoptTrackingSearch(searchId, vertical);
     if (firedFor.current === propertyId) return;
     firedFor.current = propertyId;
     let referrer: string | null = null;
@@ -45,7 +50,7 @@ export function DetailTracker({
       from: from ?? (searchId ? "list" : "direct"),
       referrer,
     });
-  }, [propertyId, searchId, rank, from]);
+  }, [propertyId, searchId, rank, from, vertical]);
   return null;
 }
 
@@ -156,61 +161,36 @@ export function Gallery({ photos, alt }: { photos: string[]; alt: string }) {
   );
 }
 
-function waLink(number: string): string {
-  return `https://wa.me/${number.replace(/[^\d]/g, "")}`;
-}
-
-export function ContactActions({
-  propertyId,
-  contact,
-  publisher,
-}: {
-  propertyId: string;
-  contact: ContactInfo | null;
-  publisher: Publisher | null;
-}) {
+/**
+ * Contacto del detalle (T4): el botón "Consultar" es el mismo de la card
+ * (WhatsApp de la inmobiliaria → WhatsApp de FINDER → teléfono → aviso), con
+ * el mensaje precargado y `contact_click` medido; debajo, los canales
+ * secundarios que el aviso informa (teléfono, web), también medidos.
+ */
+export function ContactActions({ card, rank }: { card: Card; rank: number | null }) {
   const track = (channel: string) =>
-    trackEvent(EVENTS.CONTACT_CLICK, { property_id: propertyId, channel });
-
-  const hasAny = contact && (contact.whatsapp || contact.phone || contact.web);
+    trackEvent(EVENTS.CONTACT_CLICK, { property_id: card.id, channel, target: "agency", from: "detail", rank, position: rank });
+  const phone = clean(card.contact?.phone);
+  const web = clean(card.contact?.web);
 
   return (
     <>
-      <h2>Contacto</h2>
-      <p className="pub">{publisher ? PUBLISHER_LABEL[publisher] : "Publicante no informado"}</p>
-      {hasAny ? (
-        <div className="contact-actions">
-          {contact?.whatsapp && (
-            <a
-              className="btn btn-magenta"
-              href={waLink(contact.whatsapp)}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => track("whatsapp")}
-            >
-              WhatsApp
-            </a>
-          )}
-          {contact?.phone && (
-            <a className="btn btn-ghost" href={`tel:${contact.phone.replace(/\s/g, "")}`} onClick={() => track("phone")}>
-              Llamar · {contact.phone}
-            </a>
-          )}
-          {contact?.web && (
-            <a
-              className="btn btn-ghost"
-              href={contact.web}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => track("web")}
-            >
-              Sitio del publicante
-            </a>
-          )}
-        </div>
-      ) : (
-        <p className="pub">El aviso no informa datos de contacto directo; entrá al aviso original.</p>
-      )}
+      <h2>Consultar</h2>
+      <p className="pub">{card.publisher ? PUBLISHER_LABEL[card.publisher] : "Publicante no informado"}</p>
+      <div className="contact-actions">
+        <ContactButton card={card} rank={rank} from="detail" variant="detail" />
+        <ShareButton card={card} rank={rank} from="detail" variant="detail" />
+        {phone && (
+          <a className="btn btn-ghost" href={`tel:${phone.replace(/\s/g, "")}`} onClick={() => track("phone")}>
+            Llamar · {phone}
+          </a>
+        )}
+        {web && (
+          <a className="btn btn-ghost" href={web} target="_blank" rel="noopener noreferrer" onClick={() => track("web")}>
+            Sitio del publicante
+          </a>
+        )}
+      </div>
     </>
   );
 }
@@ -220,21 +200,24 @@ export function SourceLinks({
   propertyId,
   sources,
   listingUrl,
+  rank = null,
 }: {
   propertyId: string;
   sources: Source[] | null;
   listingUrl: string | null;
+  rank?: number | null;
 }) {
   const track = (url: string | null) =>
-    trackEvent(EVENTS.SOURCE_CLICK, { property_id: propertyId, url });
+    trackEvent(EVENTS.SOURCE_CLICK, { property_id: propertyId, url, from: "detail", rank, position: rank });
 
-  if (!sources?.length && !listingUrl) return null;
+  const named = (sources ?? []).filter((s) => clean(s.name));
+  if (!named.length && !listingUrl) return null;
   return (
     <div className="contact-meta">
-      {sources?.map((s) => (
+      {named.map((s) => (
         <p key={`${s.name}-${s.id}`}>
-          Fuente: {s.url ? (
-            <a href={s.url} target="_blank" rel="noopener noreferrer" onClick={() => track(s.url)}>
+          Fuente: {clean(s.url) ? (
+            <a href={s.url!} target="_blank" rel="noopener noreferrer" onClick={() => track(s.url)}>
               {s.name} ↗
             </a>
           ) : (
@@ -250,6 +233,196 @@ export function SourceLinks({
         </p>
       )}
     </div>
+  );
+}
+
+/** Una fila de "Avisos similares", ya formateada en el server. */
+export interface SimilarRow {
+  id: string | null;
+  /** true = la propiedad del detalle, intercalada en su lugar por precio. */
+  self?: boolean;
+  /** "Esta casa" (solo en la fila propia). */
+  label?: string;
+  price: string;
+  secondary: string | null;
+  /** "US$ 375/m²", en la línea del precio. */
+  sqm: string | null;
+  meta: string;
+  thumb: string | null;
+  /** Miniatura propia (`/og/propiedad/<id>.t.jpg`), por si la foto del portal no carga. */
+  thumbFallback?: string | null;
+  /** Posición en la tira de precios (0-100) o null sin precio en dólares. */
+  x: number | null;
+}
+
+/**
+ * "Avisos similares" del detalle (decisión de German, 03/10, sobre el mockup
+ * aprobado): P2 manda el conjunto entero con el que P3 midió el precio; P1
+ * muestra las 5 de superficie más parecida, por precio, con la propiedad
+ * intercalada en su lugar ("Esta casa"), y una tira con TODOS los precios
+ * del conjunto. "Ver los N similares" despliega el resto en las mismas
+ * filas. La miniatura es la `photo_url` del similar (P2 04/10); si el portal
+ * no la sirve, se prueba una vez con la propia (`/og/propiedad/<id>.t.jpg`).
+ */
+/** La foto del similar no cargó: se prueba una vez con la miniatura propia; si tampoco, queda el fondo. */
+function thumbFailed(img: HTMLImageElement) {
+  const fallback = img.dataset.fallbackSrc;
+  if (fallback && img.getAttribute("src") !== fallback) img.src = fallback;
+  else img.style.visibility = "hidden";
+}
+
+export function SimilarsSection({
+  shown,
+  all,
+  strip,
+  moreLabel,
+  lessLabel,
+  searchId,
+  propertyId,
+}: {
+  shown: SimilarRow[];
+  all: SimilarRow[];
+  strip: { minLabel: string; maxLabel: string; selfLabel: string } | null;
+  moreLabel: string;
+  lessLabel: string;
+  searchId: string | null;
+  propertyId: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [hover, setHover] = useState<string | null>(null);
+  const list = useRef<HTMLUListElement>(null);
+  // Una foto que falla antes de la hidratación no dispara `onError`: se revisa al montar y al desplegar.
+  useEffect(() => {
+    list.current?.querySelectorAll<HTMLImageElement>("img.simrow-thumb").forEach((img) => {
+      if (img.complete && img.naturalWidth === 0) thumbFailed(img);
+    });
+  }, [open]);
+  const rows = open ? all : shown;
+  const rest = all.length - shown.length;
+  const self = all.find((r) => r.self) ?? null;
+  // Puntos de la tira: duplicados de precio apilados hacia arriba, así no se tapan.
+  const stacks = new Map<number, number>();
+  const points = all
+    .filter((r): r is SimilarRow & { x: number } => !r.self && r.x != null)
+    .map((r) => {
+      const k = Math.round(r.x);
+      const lift = stacks.get(k) ?? 0;
+      stacks.set(k, lift + 1);
+      return { ...r, lift };
+    });
+  return (
+    <>
+      {strip && points.length > 0 && (
+        <div className="pstrip" data-testid="price-strip" aria-label="Precio de esta propiedad entre sus similares">
+          <div className="pstrip-plot">
+            <div className="pstrip-axis" aria-hidden />
+            {points.map((r) => (
+              <span
+                key={r.id ?? r.x}
+                className={`pstrip-dot${hover === r.id ? " pstrip-dot--on" : ""}`}
+                style={{ left: `${r.x}%`, bottom: `${14 + r.lift * 11}px` }}
+                title={`${r.price}${r.meta ? ` · ${r.meta}` : ""}`}
+                onMouseEnter={() => setHover(r.id)}
+                onMouseLeave={() => setHover(null)}
+              />
+            ))}
+            {self?.x != null && (
+              <>
+                <span className="pstrip-self" style={{ left: `${self.x}%` }} aria-hidden />
+                <span
+                  className={`pstrip-label${self.x < 18 ? " pstrip-label--start" : self.x > 82 ? " pstrip-label--end" : ""}`}
+                  style={{ left: `${self.x}%` }}
+                >
+                  {strip.selfLabel}
+                </span>
+              </>
+            )}
+          </div>
+          <div className="pstrip-ticks" aria-hidden>
+            <span>{strip.minLabel}</span>
+            <span>{strip.maxLabel}</span>
+          </div>
+        </div>
+      )}
+
+      <ul className="simrows" ref={list}>
+        {rows.map((r, i) => {
+          const body = (
+            <>
+              {r.thumb ? (
+                // Fotos de portales arbitrarios / miniatura propia: <img> plano; si falla, queda el fondo.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  className="simrow-thumb"
+                  src={r.thumb}
+                  alt=""
+                  loading="lazy"
+                  width={88}
+                  height={66}
+                  data-fallback-src={r.thumbFallback ?? undefined}
+                  onError={(e) => thumbFailed(e.currentTarget)}
+                />
+              ) : (
+                <span className="simrow-thumb" aria-hidden />
+              )}
+              <span className="simrow-main">
+                <span className="simrow-price">
+                  <strong>{r.price}</strong>
+                  {r.secondary && <span className="simrow-sec">{r.secondary}</span>}
+                  {r.sqm && <span className="simrow-sec simrow-sqm">{r.sqm}</span>}
+                  {r.self && r.label && <span className="simrow-selftag">{r.label}</span>}
+                </span>
+                {r.meta && <span className="simrow-meta">{r.meta}</span>}
+              </span>
+              {!r.self && <span className="simrow-go" aria-hidden>Ver ↗</span>}
+            </>
+          );
+          if (r.self) {
+            return (
+              <li className="simrow simrow--self" key="self" data-testid="similar-self">
+                {body}
+              </li>
+            );
+          }
+          const on = hover != null && hover === r.id;
+          return (
+            <li className={`simrow${on ? " simrow--on" : ""}`} key={r.id ?? i} data-testid="similar-row" data-id={r.id ?? undefined}>
+              {r.id ? (
+                <a
+                  className="simrow-link"
+                  href={detailHref(r.id, { searchId, from: "comparable" })}
+                  target="_blank"
+                  rel="noopener"
+                  onClick={() => trackCardClick({ id: r.id!, opportunity_score: null }, "comparable", null)}
+                >
+                  {body}
+                </a>
+              ) : (
+                <span className="simrow-link">{body}</span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      {rest > 0 && (
+        <div className="comparables-more">
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            data-testid="comparables-more"
+            aria-expanded={open}
+            onClick={() => {
+              const next = !open;
+              setOpen(next);
+              if (next) trackEvent(EVENTS.COMPARABLES_EXPANDED, { property_id: propertyId, shown: shown.length, total: all.length });
+            }}
+          >
+            {open ? lessLabel : moreLabel}
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 

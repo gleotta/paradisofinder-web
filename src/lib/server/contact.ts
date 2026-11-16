@@ -9,6 +9,22 @@ import "server-only";
  */
 const DEFAULT_TEXT = "Hola, quiero publicar propiedades en paradisofinder.com";
 
+/** Dígitos del WhatsApp de FINDER (fallback de "Consultar", T4); null = no configurado. */
+export function finderWhatsAppDigits(): string | null {
+  const digits = (process.env.CONTACT_WHATSAPP ?? "").replace(/\D/g, "");
+  return digits || null;
+}
+
+/**
+ * Origen público del sitio (`SITE_URL`, sin barra final): base de metadatos
+ * (canonical, Open Graph, sitemap) y del link del aviso en el mensaje de
+ * WhatsApp. Sin env: el dominio de producción.
+ */
+export function siteUrl(): string {
+  const raw = process.env.SITE_URL?.trim() || "https://paradisofinder.com";
+  return raw.replace(/\/$/, "");
+}
+
 export function publishWhatsAppHref(): string | null {
   const digits = (process.env.CONTACT_WHATSAPP ?? "").replace(/\D/g, "");
   if (!digits) return null;

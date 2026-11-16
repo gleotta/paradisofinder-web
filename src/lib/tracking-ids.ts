@@ -17,7 +17,8 @@
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SEARCH_ID_RE = /^([0-9a-f-]{36})\.(\d{1,4})$/i;
 
-export type CardOrigin = "list" | "related" | "map" | "comparable";
+/** `invest_pick` (02/11): card de la "Selección de FINDER" del análisis de inversión. */
+export type CardOrigin = "list" | "related" | "map" | "comparable" | "invest_pick";
 
 export function isUuid(v: unknown): v is string {
   return typeof v === "string" && UUID_RE.test(v);
@@ -39,18 +40,21 @@ export function sessionFromSearchId(searchId: string | null | undefined): string
 }
 
 export function isCardOrigin(v: unknown): v is CardOrigin {
-  return v === "list" || v === "related" || v === "map" || v === "comparable";
+  return v === "list" || v === "related" || v === "map" || v === "comparable" || v === "invest_pick";
 }
 
 /** URL del detalle con el contexto de búsqueda que la pestaña nueva hereda. */
 export function detailHref(
   id: string,
-  ctx?: { searchId?: string | null; rank?: number | null; from?: CardOrigin },
+  ctx?: { searchId?: string | null; rank?: number | null; from?: CardOrigin; vertical?: string | null },
 ): string {
   const params = new URLSearchParams();
   if (ctx?.searchId) params.set("s", ctx.searchId);
   if (ctx?.rank != null) params.set("r", String(ctx.rank));
   if (ctx?.from && ctx.from !== "list") params.set("from", ctx.from);
+  // La vertical viaja para que los eventos de la pestaña nueva (contacto,
+  // aviso original) la lleven también (T7: session_id + vertical + posición).
+  if (ctx?.vertical) params.set("v", ctx.vertical);
   const qs = params.toString();
   return `/propiedad/${encodeURIComponent(id)}${qs ? `?${qs}` : ""}`;
 }

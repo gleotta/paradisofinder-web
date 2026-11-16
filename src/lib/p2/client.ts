@@ -10,6 +10,7 @@
 import "server-only";
 
 import type {
+  InvestRequest,
   MapSearchRequest,
   MapSearchResponse,
   PropertyDetailResponse,
@@ -18,14 +19,17 @@ import type {
   StreamRequest,
   StructuredParams,
   StructuredResponse,
+  SyncSearchResponse,
   TrackEventBody,
 } from "./types";
 import {
   mockCreateSession,
   mockGetProperty,
+  mockSearchInvest,
   mockSearchMap,
   mockSearchStream,
   mockSearchStructured,
+  mockSearchSync,
   mockSearchText,
 } from "./mocks";
 
@@ -91,7 +95,8 @@ async function p2Fetch(path: string, init: RequestInit): Promise<Response> {
   return fetch(url, { ...init, headers, cache: "no-store" });
 }
 
-async function readError(res: Response): Promise<P2Error> {
+/** Lee el cuerpo de error de P2 (`detail` o `message`) y lo vuelve `P2Error`. */
+export async function readError(res: Response): Promise<P2Error> {
   let message = `P2 respondió ${res.status}`;
   try {
     const body = (await res.json()) as { detail?: unknown; message?: unknown };
@@ -178,12 +183,64 @@ export async function searchStream(body: StreamRequest): Promise<Response> {
   }
 }
 
+/**
+ * Fallback SYNC (contrato 13/09 §3.7): `POST /search` con la MISMA sesión —
+ * mismas cards y summary que el stream, resumen template en `llm_response`,
+ * sin narrativa LLM. Lo dispara el botón "Buscar con filtros" cuando el
+ * stream lleva 4 s sin `cards` (T1). Como pasa por la sesión, el criterio
+ * queda acumulado igual que en un turno: paginación y mapa siguen andando.
+ */
+export function searchSync(body: StreamRequest): Promise<SyncSearchResponse> {
+  return p2Json("/search", body, () => mockSearchSync(body));
+}
+
+/* ------------------------------------------------------------------ */
+/* Análisis de inversión — POST /search/invest (P2 01/11, contrato §9) */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Devuelve la Response SSE de P2 tal cual, INCLUIDOS los HTTP != 200: el route
+ * handler decide qué hacer con cada uno (429 = freno de P2, con `Retry-After`
+ * y un `code`; 404 = el P2 de ese entorno todavía no tiene el endpoint; el
+ * resto, `readError`). `X-Visitor-Id` es la clave del freno por minuto de P2
+ * (sin él, un balde global de 6/min para todo el sitio). `signal`: cerrar el
+ * SSE cancela en P2 las búsquedas y el stream del LLM (si el paso 3 no
+ * empezó, no se paga).
+ */
+export async function searchInvest(
+  body: InvestRequest,
+  opts: { visitorId?: string | null; signal?: AbortSignal } = {},
+): Promise<Response> {
+  if (mocksEnabled()) return mockSearchInvest(body);
+  try {
+    return await p2Fetch("/search/invest", {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: { Accept: "text/event-stream", ...(opts.visitorId ? { "X-Visitor-Id": opts.visitorId } : {}) },
+      signal: opts.signal,
+    });
+  } catch (err) {
+    if (mode() === "auto" && isConnectionError(err)) {
+      warnFallback(err);
+      return mockSearchInvest(body);
+    }
+    throw err;
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* Detalle y eventos — spec §4                                         */
 /* ------------------------------------------------------------------ */
 
+/** Los ids de P2 son UUID; a cualquier otra cosa P2 responde 500 (visto el 01/11). */
+const PROPERTY_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function getProperty(id: string): Promise<PropertyDetailResponse | null> {
   if (mocksEnabled()) return mockGetProperty(id);
+  // En `live`, un id que no tiene forma de UUID es "no existe" (404 de P1) sin
+  // llamar a P2: si no, su 500 se volvía página de error. En `auto` se deja
+  // pasar para que los ids de los mocks sigan cayendo al fallback con P2 caído.
+  if (mode() === "live" && !PROPERTY_ID.test(id)) return null;
   try {
     const res = await p2Fetch(`/property/${encodeURIComponent(id)}`, { method: "GET" });
     if (res.status === 404) return null;

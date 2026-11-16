@@ -17,7 +17,18 @@ services:
       P2_MODE: live
       # Botón "Publicá tu propiedad": exportar CONTACT_WHATSAPP en el shell o en un .env junto a este archivo.
       CONTACT_WHATSAPP: ${CONTACT_WHATSAPP:-}
+      # Tablero interno /interno/embudo?token=…: la imagen corre con NODE_ENV=production, así que sin
+      # token responde 404. Definir METRICS_TOKEN en el .env junto a este archivo (openssl rand -hex 24).
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
       EVENTS_LOG_DIR: /data/logs
+      CACHE_DIR: /data/cache
+      # Análisis de inversión (02/11, docs/DECISION_2026-11-02_analisis-inversion.md): mismas
+      # variables opcionales que en Railway; vacías = defaults (encendido, 5 cada 10 min, 300/día, caché 15 min).
+      INVEST_ANALYSIS_ENABLED: ${INVEST_ANALYSIS_ENABLED:-}
+      INVEST_QUOTA_PER_VISITOR: ${INVEST_QUOTA_PER_VISITOR:-}
+      INVEST_QUOTA_WINDOW_MIN: ${INVEST_QUOTA_WINDOW_MIN:-}
+      INVEST_DAILY_MAX: ${INVEST_DAILY_MAX:-}
+      INVEST_CACHE_TTL_MIN: ${INVEST_CACHE_TTL_MIN:-}
     volumes:
       - pfw-data:/data
     extra_hosts:

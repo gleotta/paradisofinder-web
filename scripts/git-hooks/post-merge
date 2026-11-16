@@ -1,0 +1,3 @@
+#!/bin/bash
+# paradisofinder.com — P1: hook versionado. Cubre `git pull` y `git merge` sobre la rama.
+exec "$(git rev-parse --show-toplevel)/scripts/ci/hook_dispatch.sh" merge
