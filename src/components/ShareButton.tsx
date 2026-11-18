@@ -29,7 +29,7 @@ export default function ShareButton({
   const { siteUrl } = useContactConfig();
   const [copied, setCopied] = useState(false);
   const url = propertyShareUrl(siteUrl, card.id);
-  const title = `${PROPERTY_TYPE_LABEL[card.property_type] ?? "Propiedad"} en ${zoneName(card.zone)} · ${mainPrice(card)}`;
+  const title = `${PROPERTY_TYPE_LABEL[card.property_type] ?? "Immobile"} a ${zoneName(card.zone)} · ${mainPrice(card)}`;
 
   const onClick = async () => {
     const native = typeof navigator.share === "function";
@@ -48,11 +48,11 @@ export default function ShareButton({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      window.prompt("Copiá el link de la propiedad", url);
+      window.prompt("Copia il link dell'immobile", url);
     }
   };
 
-  const label = copied ? "Link copiado" : "Compartir";
+  const label = copied ? "Link copiato" : "Condividi";
   return (
     <button
       type="button"
@@ -66,7 +66,7 @@ export default function ShareButton({
       {variant === "detail" && <span aria-live="polite">{label}</span>}
       {variant === "card" && copied && (
         <span className="share-copied" role="status">
-          Link copiado
+          Link copiato
         </span>
       )}
     </button>

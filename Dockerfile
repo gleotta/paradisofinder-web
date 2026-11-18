@@ -18,6 +18,12 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # `public/` hoy solo trae los íconos del manifest (`public/icons/`); el mkdir queda
 # por si se vacía (git no versiona directorios vacíos), porque el COPY de abajo lo exige.
+# Mercado del build (`src/lib/market.ts`): `italia` (default en esta rama) o `san_juan`.
+# Es una constante de compilación: una imagen atiende UN mercado.
+ARG NEXT_PUBLIC_MARKET=italia
+ARG NEXT_PUBLIC_THEME=
+ENV NEXT_PUBLIC_MARKET=$NEXT_PUBLIC_MARKET \
+    NEXT_PUBLIC_THEME=$NEXT_PUBLIC_THEME
 RUN mkdir -p public && npm run build
 
 # ---- runner: mínimo, no-root, healthcheck ----

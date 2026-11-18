@@ -138,6 +138,13 @@ export async function buildFunnel(days = 30): Promise<FunnelReport> {
     return report.byVertical[key];
   };
 
+  // Vertical de cada búsqueda (italia, 18/11). En el sitio italiano el visitante
+  // no elige vertical: P2 la deduce de la consulta y la web se entera DESPUÉS
+  // (`vertical_resynced`, y de ahí en más viaja en el sobre). `search_submitted`
+  // sale sin vertical y sin `search_id`, así que la búsqueda se atribuye por su
+  // `search_id` con lo que digan sus eventos posteriores.
+  const raws = new Map<string, string>();
+  const verticalOf = new Map<string, string>();
   for (const f of files) {
     let raw = "";
     try {
@@ -145,6 +152,24 @@ export async function buildFunnel(days = 30): Promise<FunnelReport> {
     } catch {
       continue;
     }
+    raws.set(f, raw);
+    for (const line of raw.split("\n")) {
+      if (!line) continue;
+      try {
+        const ev = JSON.parse(line) as Ev;
+        if (!ev.search_id) continue;
+        const to = ev.event === "vertical_resynced" ? ev.payload?.to : null;
+        const found = typeof to === "string" && to ? to : ev.vertical;
+        if (found) verticalOf.set(ev.search_id, found);
+      } catch {
+        // línea rota: la cuenta el recorrido principal
+      }
+    }
+  }
+
+  for (const f of files) {
+    const raw = raws.get(f);
+    if (raw === undefined) continue;
     for (const line of raw.split("\n")) {
       if (!line) continue;
       let ev: Ev;
@@ -163,16 +188,20 @@ export async function buildFunnel(days = 30): Promise<FunnelReport> {
         byDay.set(day, d);
       }
       const p = ev.payload ?? {};
-      const v = ev.vertical ?? (typeof p.vertical === "string" ? p.vertical : null);
+      const own = ev.vertical ?? (typeof p.vertical === "string" ? p.vertical : null);
+      const v = own ?? (ev.search_id ? verticalOf.get(ev.search_id) ?? null : null);
       switch (ev.event) {
         case "search_submitted":
           d.searches++;
-          vert(v).searches++;
+          // Con vertical elegida (san_juan) se atribuye acá; sin ella (italia),
+          // en `search_performed`, cuando ya hay `search_id` con qué resolverla.
+          if (own) vert(own).searches++;
           legacyCounted.add(day);
           break;
         // Logs anteriores al 14/09 (sin `search_submitted`): la búsqueda nueva
         // era `search_performed` con mode search; se cuenta una vez por corrida.
         case "search_performed":
+          if (p.mode === "search" && !own && mark("vertical-search", ev.search_id)) vert(v).searches++;
           if (p.mode === "search" && mark("legacy-search", ev.search_id) && !legacyCounted.has(day)) {
             legacy.set(day, (legacy.get(day) ?? 0) + 1);
           }

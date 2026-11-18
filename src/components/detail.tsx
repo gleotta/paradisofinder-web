@@ -109,7 +109,7 @@ export function Gallery({ photos, alt }: { photos: string[]; alt: string }) {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={main}
-          alt={`${alt} — foto ${idx + 1} de ${count}`}
+          alt={`${alt} — foto ${idx + 1} di ${count}`}
           onError={() => markBroken(main)}
           onClick={() => go(1)}
         />
@@ -119,7 +119,7 @@ export function Gallery({ photos, alt }: { photos: string[]; alt: string }) {
               type="button"
               className="gallery-nav gallery-nav--prev"
               onClick={() => go(-1)}
-              aria-label="Foto anterior"
+              aria-label="Foto precedente"
             >
               ‹
             </button>
@@ -127,7 +127,7 @@ export function Gallery({ photos, alt }: { photos: string[]; alt: string }) {
               type="button"
               className="gallery-nav gallery-nav--next"
               onClick={() => go(1)}
-              aria-label="Foto siguiente"
+              aria-label="Foto successiva"
             >
               ›
             </button>
@@ -139,7 +139,7 @@ export function Gallery({ photos, alt }: { photos: string[]; alt: string }) {
       </div>
       {count > 1 && (
         <div className="gallery-side">
-          <div className="gallery-strip" ref={stripRef} role="list" aria-label="Todas las fotos">
+          <div className="gallery-strip" ref={stripRef} role="list" aria-label="Tutte le foto">
             {usable.map((src, i) => (
               <button
                 key={src}
@@ -147,7 +147,7 @@ export function Gallery({ photos, alt }: { photos: string[]; alt: string }) {
                 role="listitem"
                 className={`gallery-thumb${i === idx ? " gallery-thumb--active" : ""}`}
                 onClick={() => setActive(i)}
-                aria-label={`Foto ${i + 1} de ${count}`}
+                aria-label={`Foto ${i + 1} di ${count}`}
                 aria-current={i === idx ? "true" : undefined}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -171,25 +171,20 @@ export function ContactActions({ card, rank }: { card: Card; rank: number | null
   const track = (channel: string) =>
     trackEvent(EVENTS.CONTACT_CLICK, { property_id: card.id, channel, target: "agency", from: "detail", rank, position: rank });
   const phone = clean(card.contact?.phone);
-  const web = clean(card.contact?.web);
 
   return (
     <>
-      <h2>Consultar</h2>
-      <p className="pub">{card.publisher ? PUBLISHER_LABEL[card.publisher] : "Publicante no informado"}</p>
+      <h2>Contatta l&apos;agenzia</h2>
+      {card.publisher && <p className="pub">{PUBLISHER_LABEL[card.publisher]}</p>}
       <div className="contact-actions">
         <ContactButton card={card} rank={rank} from="detail" variant="detail" />
         <ShareButton card={card} rank={rank} from="detail" variant="detail" />
         {phone && (
           <a className="btn btn-ghost" href={`tel:${phone.replace(/\s/g, "")}`} onClick={() => track("phone")}>
-            Llamar · {phone}
+            Chiama · {phone}
           </a>
         )}
-        {web && (
-          <a className="btn btn-ghost" href={web} target="_blank" rel="noopener noreferrer" onClick={() => track("web")}>
-            Sitio del publicante
-          </a>
-        )}
+        {/* Italia: la web de la agencia es el portal de origen; no se enlaza. */}
       </div>
     </>
   );
@@ -210,8 +205,11 @@ export function SourceLinks({
   const track = (url: string | null) =>
     trackEvent(EVENTS.SOURCE_CLICK, { property_id: propertyId, url, from: "detail", rank, position: rank });
 
+  // Italia: el sitio es el de la propia inmobiliaria (18/11). No hay "fuente"
+  // ni link al aviso del portal de origen: el bloque no se muestra.
+  const mostrarFuente = false;
   const named = (sources ?? []).filter((s) => clean(s.name));
-  if (!named.length && !listingUrl) return null;
+  if (!mostrarFuente || (!named.length && !listingUrl)) return null;
   return (
     <div className="contact-meta">
       {named.map((s) => (
@@ -245,7 +243,7 @@ export interface SimilarRow {
   label?: string;
   price: string;
   secondary: string | null;
-  /** "US$ 375/m²", en la línea del precio. */
+  /** "€ 375/m²", en la línea del precio. */
   sqm: string | null;
   meta: string;
   thumb: string | null;
@@ -313,7 +311,7 @@ export function SimilarsSection({
   return (
     <>
       {strip && points.length > 0 && (
-        <div className="pstrip" data-testid="price-strip" aria-label="Precio de esta propiedad entre sus similares">
+        <div className="pstrip" data-testid="price-strip" aria-label="Prezzo di questo immobile tra gli annunci simili">
           <div className="pstrip-plot">
             <div className="pstrip-axis" aria-hidden />
             {points.map((r) => (
@@ -374,7 +372,7 @@ export function SimilarsSection({
                 </span>
                 {r.meta && <span className="simrow-meta">{r.meta}</span>}
               </span>
-              {!r.self && <span className="simrow-go" aria-hidden>Ver ↗</span>}
+              {!r.self && <span className="simrow-go" aria-hidden>Vedi ↗</span>}
             </>
           );
           if (r.self) {
@@ -463,7 +461,7 @@ export function BackLink() {
   if (canGoBack === false) {
     return (
       <Link href="/" className="backlink">
-        ← Nueva búsqueda
+        ← Nuova ricerca
       </Link>
     );
   }
@@ -474,7 +472,7 @@ export function BackLink() {
       style={canGoBack === null ? { visibility: "hidden" } : undefined}
       onClick={() => history.back()}
     >
-      ← Volver a los resultados
+      ← Torna ai risultati
     </button>
   );
 }

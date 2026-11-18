@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n";
 import { VERTICALS, type VerticalId } from "@/lib/vertical";
 
 /**
@@ -23,7 +24,7 @@ export default function VerticalSelector({
     <div
       className={`vseg${className ? ` ${className}` : ""}`}
       role="group"
-      aria-label="Qué querés hacer"
+      aria-label={t("Qué querés hacer")}
     >
       {VERTICALS.map((v) => (
         <button

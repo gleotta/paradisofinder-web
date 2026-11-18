@@ -4,6 +4,10 @@ import Link from "next/link";
 import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "./globals.css";
+import "./italia.css";
+import localFont from "next/font/local";
+import { IS_ITALIA, MARKET, MARKET_CONFIG } from "@/lib/market";
+import { ItaliaFooter, ItaliaHeader } from "@/markets/italia/Chrome";
 import { ContactConfigProvider } from "@/components/ContactConfig";
 import PublishCta from "@/components/PublishCta";
 import { finderWhatsAppDigits, publishWhatsAppHref, siteUrl } from "@/lib/server/contact";
@@ -17,7 +21,27 @@ export const viewport: Viewport = {
 
 const SITE = siteUrl();
 
-export const metadata: Metadata = {
+// Tipografías del mercado italia (`src/fonts/`, servidas desde el propio
+// sitio: la CSP no admite fuentes de terceros). Sin preload: san_juan no las
+// pide nunca; en italia entran con el primer texto que las usa.
+const inter = localFont({ src: "../fonts/inter-latin.woff2", weight: "400 700", variable: "--font-inter", display: "swap", preload: false, adjustFontFallback: false });
+const jakarta = localFont({ src: "../fonts/jakarta-latin.woff2", weight: "600 800", variable: "--font-jakarta", display: "swap", preload: false, adjustFontFallback: false });
+
+const METADATA_ITALIA: Metadata = {
+  metadataBase: new URL(SITE),
+  title: {
+    default: "finder Italia — case in vendita e in affitto",
+    template: "%s — finder Italia",
+  },
+  description:
+    "Scrivi la casa che cerchi con parole tue: finder trova gli immobili in vendita e in affitto e ti dice come si colloca il prezzo rispetto alla zona.",
+  openGraph: { siteName: MARKET_CONFIG.siteName, locale: MARKET_CONFIG.ogLocale, type: "website" },
+  twitter: { card: "summary_large_image" },
+  // demo: fuera de los buscadores
+  robots: { index: false, follow: false },
+};
+
+const METADATA_SAN_JUAN: Metadata = {
   // Base de canonical / Open Graph / sitemap (T6): `SITE_URL` del server.
   metadataBase: new URL(SITE),
   title: {
@@ -34,6 +58,8 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image" },
 };
 
+export const metadata: Metadata = IS_ITALIA ? METADATA_ITALIA : METADATA_SAN_JUAN;
+
 /**
  * MVP beta (05/09 — `docs/DECISION_2026-09-05_mvp-beta.md`): la etiqueta Beta
  * acompaña a la marca en todas las pantallas, el pie lo explica, y el botón
@@ -47,6 +73,24 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   await connection();
   const publishHref = publishWhatsAppHref();
   const contact = { finderWhatsApp: finderWhatsAppDigits(), siteUrl: SITE };
+  if (IS_ITALIA) {
+    return (
+      <html
+        lang={MARKET_CONFIG.lang}
+        data-market={MARKET}
+        data-theme={MARKET_CONFIG.theme}
+        className={`${inter.variable} ${jakarta.variable}`}
+      >
+        <body>
+          <ContactConfigProvider value={contact}>
+            <ItaliaHeader />
+            {children}
+            <ItaliaFooter />
+          </ContactConfigProvider>
+        </body>
+      </html>
+    );
+  }
   return (
     <html lang="es-AR">
       <body>

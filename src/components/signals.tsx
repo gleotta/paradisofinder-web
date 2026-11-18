@@ -103,7 +103,7 @@ export function PositionBlock({
           <>
             {" · "}
             <a href={similarsHref} target="_blank" rel="noopener" onClick={onSimilarsClick} data-testid="similars-link">
-              ver similares
+              vedi simili
             </a>
           </>
         )}
@@ -114,8 +114,8 @@ export function PositionBlock({
             <span className="posbar-mark" style={{ left: `${info.percentile}%` }} />
           </div>
           <div className="posbar-ends">
-            <span>más barato</span>
-            <span>más caro</span>
+            <span>più economico</span>
+            <span>più caro</span>
           </div>
         </div>
       )}
@@ -166,7 +166,7 @@ export function ZoneBlock({ info, full = false }: { info: ZoneRefInfo; full?: bo
 export function EstimateBlock({ info }: { info: { yieldLine: string | null; rentLine: string | null; note?: string } }) {
   return (
     <div className="estblock" data-testid="estimate" data-tone="neutral">
-      <span className="block-kicker">Esta propiedad · estimación</span>
+      <span className="block-kicker">Questo immobile · stima</span>
       {info.yieldLine && <span className="estblock-yield">{info.yieldLine}</span>}
       {info.rentLine && <span className="estblock-rent">{info.rentLine}</span>}
       <span className="estblock-note">{info.note ?? ESTIMATE_BLOCK_NOTE}</span>

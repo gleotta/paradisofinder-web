@@ -19,12 +19,12 @@ export type ContactChannel = "whatsapp" | "phone" | "web" | "listing";
 export type ContactTarget = "agency" | "finder" | "listing";
 
 export function contactMessage(card: Card, siteUrl: string): string {
-  const type = PROPERTY_TYPE_LABEL[card.property_type] ?? "Propiedad";
+  const type = PROPERTY_TYPE_LABEL[card.property_type] ?? "Immobile";
   const src = card.sources?.[0];
-  const ref = src ? `${clean(src.name) ?? "aviso"} ${clean(src.id) ?? ""}`.trim() : null;
+  const ref = src ? `${clean(src.name) ?? "annuncio"} ${clean(src.id) ?? ""}`.trim() : null;
   const parts = [
-    `Hola, vi este aviso en paradisofinder.com y quiero consultar:`,
-    `${type} en ${zoneName(card.zone)} · ${mainPrice(card)}`,
+    `Buongiorno, ho visto questo annuncio su finder Italia e vorrei informazioni:`,
+    `${type} a ${zoneName(card.zone)} · ${mainPrice(card)}`,
     ref ? `Ref. ${ref}` : null,
     siteUrl ? propertyShareUrl(siteUrl, card.id) : null,
   ].filter(Boolean);
@@ -46,10 +46,9 @@ export function resolveContact(
   }
   const phone = clean(card.contact?.phone);
   if (phone) return { href: `tel:${phone.replace(/\s/g, "")}`, channel: "phone", target: "agency", external: false };
-  const web = clean(card.contact?.web);
-  if (web) return { href: web, channel: "web", target: "agency", external: true };
-  const listing = clean(card.listing_url);
-  if (listing) return { href: listing, channel: "listing", target: "listing", external: true };
+  // (La web de la agencia apunta al portal de origen: en Italia no se enlaza.)
+  // Italia: sin link al aviso del portal de origen (18/11). Sin teléfono,
+  // WhatsApp ni web de la agencia, no hay botón.
   return null;
 }
 
@@ -78,14 +77,14 @@ export default function ContactButton({
       score: card.opportunity_score,
       price_usd: card.price_usd,
     });
-  const label = target.channel === "phone" ? "Llamar" : "Consultar";
+  const label = target.channel === "phone" ? "Chiama l'agenzia" : "Contatta l'agenzia";
   return (
     <a
       className={`btn btn-magenta btn-consult${variant === "detail" ? " btn-consult--detail" : ""}`}
       href={target.href}
       onClick={onClick}
       {...(target.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-      aria-label={`${label} por ${target.channel === "whatsapp" ? "WhatsApp" : target.channel === "phone" ? "teléfono" : "el aviso"}`}
+      aria-label={`${label} ${target.channel === "whatsapp" ? "su WhatsApp" : target.channel === "phone" ? "per telefono" : "dall'annuncio"}`}
       data-channel={target.channel}
       data-target={target.target}
     >

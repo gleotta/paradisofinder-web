@@ -32,32 +32,32 @@ export interface ChipModel {
 
 /** "Quitar X": vocabulario de retracción que el motor de P2 entiende (sondado 14/09). */
 const REMOVE_PHRASE: Record<string, string> = {
-  property_type: "Quitar el tipo",
-  zones: "Quitar la zona",
-  place: "Quitar el lugar",
-  budget_max: "Quitar el presupuesto",
-  budget_min: "Quitar el presupuesto",
-  budget: "Quitar el presupuesto",
-  bedrooms: "Quitar los dormitorios",
-  bathrooms: "Quitar los baños",
-  rooms: "Quitar los ambientes",
-  pool: "Quitar pileta",
-  bbq_area: "Quitar quincho",
-  patio: "Quitar patio",
-  furnished: "Quitar amoblado",
-  parking: "Quitar cochera",
-  gated_community: "Quitar barrio cerrado",
-  mortgage_eligible: "Quitar apto crédito",
-  elevator: "Quitar ascensor",
-  area_min_sqm: "Quitar la superficie",
-  is_duplex: "Quitar dúplex",
-  land_class: "Quitar la clase de lote",
-  land_services: "Quitar servicios",
-  in_subdivision: "Quitar loteo",
-  buildable: "Quitar apto construcción",
-  condition: "Quitar el estado",
-  near: "Quitar la cercanía",
-  days_on_market: "Quitar la antigüedad",
+  property_type: "Togli la tipologia",
+  zones: "Togli la zona",
+  place: "Togli il luogo",
+  budget_max: "Togli il budget",
+  budget_min: "Togli il budget",
+  budget: "Togli il budget",
+  bedrooms: "Togli le camere",
+  bathrooms: "Togli i bagni",
+  rooms: "Togli i locali",
+  pool: "Togli piscina",
+  bbq_area: "Togli barbecue",
+  patio: "Togli giardino",
+  furnished: "Togli arredato",
+  parking: "Togli il box",
+  gated_community: "Togli comprensorio privato",
+  mortgage_eligible: "Togli mutuabile",
+  elevator: "Togli ascensore",
+  area_min_sqm: "Togli la superficie",
+  is_duplex: "Togli duplex",
+  land_class: "Togli il tipo di terreno",
+  land_services: "Togli servizi",
+  in_subdivision: "Togli lottizzazione",
+  buildable: "Togli edificabile",
+  condition: "Togli lo stato",
+  near: "Togli la vicinanza",
+  days_on_market: "Togli il tempo in catalogo",
 };
 
 function editKind(field: string): ChipModel["edit"] {
@@ -119,29 +119,32 @@ function chipFromFilter(f: HardFilter, i: number): ChipModel {
 export const ZONE_OPTIONS = ZONES.map((z) => ({ code: z.code, name: z.name, macro: z.macro }));
 
 export function zonePhrase(code: string): string {
-  return `en ${zoneDisplay(code) ?? code}`;
+  return `a ${zoneDisplay(code) ?? code}`;
 }
 
-const nf = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 });
+const nf = new Intl.NumberFormat("it-IT", { maximumFractionDigits: 0, useGrouping: false });
 
 export function budgetPhrase(amount: number, currency: "USD" | "ARS", kind: "max" | "min" = "max"): string {
-  const money = currency === "USD" ? `US$ ${nf.format(amount)}` : `$ ${nf.format(amount)}`;
-  return `${kind === "max" ? "hasta" : "desde"} ${money}`;
+  // Italia: una sola moneda. `currency` se conserva en la firma (lo pasa el
+  // editor), pero la frase siempre va en euros.
+  void currency;
+  return kind === "max" ? `fino a ${nf.format(amount)} euro` : `sopra i ${nf.format(amount)} euro`;
 }
 
 export function bedroomsPhrase(n: number): string {
-  return `de ${n} dormitorios`;
+  return n === 1 ? "con 1 camera" : `con ${n} camere`;
 }
 
 export const TYPE_OPTIONS: { value: string; label: string; phrase: string }[] = [
-  { value: "house", label: "Casa", phrase: "casa" },
-  { value: "apartment", label: "Departamento", phrase: "departamento" },
-  { value: "land", label: "Lote", phrase: "lote" },
+  { value: "apartment", label: "Appartamento", phrase: "appartamento" },
+  { value: "villa", label: "Villa", phrase: "villa" },
+  { value: "house", label: "Casa indipendente", phrase: "casa indipendente" },
+  { value: "land", label: "Terreno", phrase: "terreno" },
 ];
 
 export const LAND_CLASS_OPTIONS: { value: string; label: string; phrase: string }[] = [
-  { value: "urban", label: "Urbano", phrase: "lote urbano" },
-  { value: "rural", label: "Rural", phrase: "lote rural" },
+  { value: "urban", label: "Edificabile", phrase: "terreno edificabile" },
+  { value: "rural", label: "Agricolo", phrase: "terreno agricolo" },
 ];
 
 /** Moneda y monto actuales del chip de presupuesto, para precargar el editor. */
@@ -172,10 +175,13 @@ export interface AssumptionModel {
  */
 export function assumptionModel(note: string | null | undefined): AssumptionModel | null {
   if (!note) return null;
-  const n = note.toLowerCase();
-  if (/asum/.test(n)) {
-    if (/compra|venta/.test(n)) return { text: "Asumí compra", flipTo: "alquilar", flipLabel: "cambiar a alquiler" };
-    if (/alquil/.test(n)) return { text: "Asumí alquiler", flipTo: "comprar", flipLabel: "cambiar a compra" };
+  // P2 Italia: "Ho inteso acquisto — dimmi se cerchi in affitto" /
+  // "Ho inteso affitto — dimmi se cerchi di comprare". Lo asumido es lo que
+  // va ANTES de la raya; después viene la alternativa que se ofrece.
+  const n = note.toLowerCase().split("—")[0];
+  if (/inteso/.test(n)) {
+    if (/acquisto|vendita/.test(n)) return { text: "Ho inteso acquisto", flipTo: "alquilar", flipLabel: "passa all'affitto" };
+    if (/affitt/.test(n)) return { text: "Ho inteso affitto", flipTo: "comprar", flipLabel: "passa alla vendita" };
   }
   return { text: note, flipTo: null, flipLabel: null };
 }
@@ -192,16 +198,15 @@ export interface OrderOption {
 }
 
 export const ORDER_OPTIONS: OrderOption[] = [
-  { code: "opportunity_score", label: "Oportunidad (score)", phrase: "ordenar por score" },
-  { code: "price_asc", label: "Precio: menor a mayor", phrase: "las más baratas primero" },
-  { code: "price_desc", label: "Precio: mayor a menor", phrase: "de mayor a menor precio" },
-  { code: "days_on_market_desc", label: "Más tiempo publicadas (para negociar)", phrase: "mucho tiempo publicada, para negociar precio" },
-  { code: "valuation_gap_desc", label: "Más por debajo del precio de su zona", phrase: "las que están más por debajo del precio de su zona", saleOnly: true },
-  { code: "gross_yield_desc", label: "Mayor renta estimada", phrase: "ordenadas por renta", saleOnly: true },
+  { code: "opportunity_score", label: "Più rilevanti", phrase: "ordinale per opportunità" },
+  { code: "price_asc", label: "Prezzo: dal più basso", phrase: "i più economici prima" },
+  { code: "price_desc", label: "Prezzo: dal più alto", phrase: "i più cari prima" },
+  { code: "days_on_market_desc", label: "Da più tempo in catalogo (per trattare)", phrase: "da più tempo pubblicati" },
+  { code: "valuation_gap_desc", label: "Più sotto il prezzo della zona", phrase: "i più sottovalutati", saleOnly: true },
   // La cercanía necesita un lugar: la vista pide el texto y arma "cerca de X".
-  { code: "distance_asc", label: "Cercanía a un lugar…", phrase: null },
+  { code: "distance_asc", label: "Vicinanza a un luogo…", phrase: null },
 ];
 
 export function nearPhrase(place: string): string {
-  return `cerca de ${place.trim()}`;
+  return `vicino a ${place.trim()}`;
 }

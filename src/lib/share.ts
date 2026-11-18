@@ -10,7 +10,7 @@ function origin(siteUrl: string): string {
 }
 
 export function propertyShareUrl(siteUrl: string, id: string): string {
-  return `${origin(siteUrl)}/propiedad/${encodeURIComponent(id)}`;
+  return `${origin(siteUrl)}/immobile/${encodeURIComponent(id)}`;
 }
 
 export function propertyOgImageUrl(siteUrl: string, id: string): string {

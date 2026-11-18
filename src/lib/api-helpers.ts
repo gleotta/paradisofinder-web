@@ -14,7 +14,7 @@ export function errorResponse(err: unknown): NextResponse {
       case 401:
         console.error("[p2] 401 — API key faltante o inválida: revisar P2_API_KEY");
         return NextResponse.json(
-          { error: "Error de configuración del servidor. Avisale al equipo." },
+          { error: "Errore di configurazione del server. Avvisa il team." },
           { status: 500 },
         );
       case 404:
@@ -22,12 +22,12 @@ export function errorResponse(err: unknown): NextResponse {
       case 422:
         console.error(`[p2] 422 — params inválidos (bug de P1): ${err.message}`);
         return NextResponse.json(
-          { error: "No pude procesar esa consulta. Probá reformularla." },
+          { error: "Non sono riuscito a elaborare la richiesta. Prova a riformularla." },
           { status: 422 },
         );
       case 429:
         return NextResponse.json(
-          { error: "Estamos recibiendo muchas consultas. Esperá unos segundos y probá de nuevo." },
+          { error: "Stiamo ricevendo molte richieste. Aspetta qualche secondo e riprova." },
           { status: 429 },
         );
       case 502:
@@ -37,13 +37,13 @@ export function errorResponse(err: unknown): NextResponse {
       default:
         console.error(`[p2] ${err.status} — ${err.message}`);
         return NextResponse.json(
-          { error: "Error interno. Probá de nuevo en un momento." },
+          { error: "Errore interno. Riprova tra un momento." },
           { status: err.status >= 400 && err.status < 600 ? err.status : 500 },
         );
     }
   }
   console.error("[api] error inesperado:", err);
-  return NextResponse.json({ error: "Error interno. Probá de nuevo en un momento." }, { status: 500 });
+  return NextResponse.json({ error: "Errore interno. Riprova tra un momento." }, { status: 500 });
 }
 
 export async function readJsonBody<T>(req: Request): Promise<T | null> {

@@ -1,9 +1,10 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import SearchResultsView from "@/components/SearchResultsView";
+import { t } from "@/lib/i18n";
 
 export const metadata: Metadata = {
-  title: "Resultados",
+  title: t("Resultados"),
   robots: { index: false },
 };
 
@@ -20,7 +21,7 @@ export default function BuscarPage() {
         fallback={
           <div className="results-page container">
             <div className="loading-row">
-              <span className="spinner" aria-hidden /> Cargando…
+              <span className="spinner" aria-hidden /> {t("Cargando…")}
             </div>
           </div>
         }

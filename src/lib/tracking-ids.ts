@@ -1,3 +1,4 @@
+import { MARKET_CONFIG } from "./market";
 /**
  * Identificadores de correlación de la analítica (MVP beta, 05/09 — ver
  * `docs/DECISION_2026-09-05_mvp-beta.md`). Módulo SIN "use client": lo usan
@@ -56,5 +57,5 @@ export function detailHref(
   // aviso original) la lleven también (T7: session_id + vertical + posición).
   if (ctx?.vertical) params.set("v", ctx.vertical);
   const qs = params.toString();
-  return `/propiedad/${encodeURIComponent(id)}${qs ? `?${qs}` : ""}`;
+  return `${MARKET_CONFIG.routes.property}/${encodeURIComponent(id)}${qs ? `?${qs}` : ""}`;
 }

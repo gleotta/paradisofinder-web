@@ -20,7 +20,8 @@ export interface Zone {
   /** Slug de URL (sin acentos ni guiones bajos). */
   slug: string;
   /** Gran San Juan primero en los selectores. */
-  macro: "gran_san_juan" | "periferia" | "alejado";
+  /** Italia: la regione del comune (agrupa el selector de zona). */
+  macro: string;
 }
 
 export const ZONES: Zone[] = zonesData as Zone[];
@@ -46,6 +47,6 @@ export function zoneDisplay(code: string | null | undefined): string | null {
   return code
     .replace(/_/g, " ")
     .split(/\s+/)
-    .map((w) => (w.length > 2 ? w.charAt(0).toLocaleUpperCase("es-AR") + w.slice(1) : w))
+    .map((w) => (w.length > 2 ? w.charAt(0).toLocaleUpperCase("it-IT") + w.slice(1) : w))
     .join(" ");
 }

@@ -19,8 +19,11 @@ import type { MapPin } from "@/lib/p2/types";
 import { PROPERTY_TYPE_LABEL, RENTAL_PERIOD_SUFFIX } from "@/lib/labels";
 import { compactPrice, fmtMoney } from "@/lib/format";
 import { detailHref, EVENTS, trackCardClick, trackEvent } from "@/lib/track";
+import { MARKET_CONFIG } from "@/lib/market";
 
-const SJ_CENTER: [number, number] = [-31.5351, -68.5386];
+// Centro y zoom sin resultados ubicables: los del mercado (Italia entera).
+const SJ_CENTER: [number, number] = MARKET_CONFIG.map.center;
+const EMPTY_ZOOM = MARKET_CONFIG.map.zoom;
 
 interface Props {
   /** Pins del universo mapeable (tier >= 2 con coordenadas), tal como los da P2. */
@@ -42,7 +45,7 @@ function pinPrice(pin: MapPin): string {
   const base = fmtMoney(pin.price, pin.currency ?? "ARS");
   if (pin.operation !== "rent") return base;
   // null = no informado → mensual asumido, sin comparar entre periodicidades.
-  return `${base} ${pin.rental_period ? RENTAL_PERIOD_SUFFIX[pin.rental_period] : "/mes"}`;
+  return `${base} ${pin.rental_period ? RENTAL_PERIOD_SUFFIX[pin.rental_period] : "/mese"}`;
 }
 
 function markerIcon(L: typeof LType, pin: MapPin, active: boolean): LType.DivIcon {
@@ -75,9 +78,9 @@ function trimmedBounds(L: typeof LType, pins: MapPin[]): LType.LatLngBounds | nu
 
 /** El detalle abre en pestaña nueva (05/09); `data-id` sirve al tracking del click. */
 function popupHtml(pin: MapPin, searchId: string | null): string {
-  const title = PROPERTY_TYPE_LABEL[pin.property_type] ?? "Propiedad";
+  const title = PROPERTY_TYPE_LABEL[pin.property_type] ?? "Immobile";
   const href = detailHref(pin.id, { searchId, from: "map" });
-  return `<a class="map-pop map-pop--compact" href="${href}" target="_blank" rel="noopener" data-id="${pin.id}"><span class="map-pop-price">${pinPrice(pin)}</span><span class="map-pop-title">${title}</span><span class="map-pop-cta">Ver detalle ↗</span></a>`;
+  return `<a class="map-pop map-pop--compact" href="${href}" target="_blank" rel="noopener" data-id="${pin.id}"><span class="map-pop-price">${pinPrice(pin)}</span><span class="map-pop-title">${title}</span><span class="map-pop-cta">Vedi scheda ↗</span></a>`;
 }
 
 export default function ResultsMap({ pins, selectedId, onSelect, searchId, layer = "homes" }: Props) {
@@ -117,7 +120,7 @@ export default function ResultsMap({ pins, selectedId, onSelect, searchId, layer
       LRef.current = L;
       const map = L.map(divRef.current, {
         center: SJ_CENTER,
-        zoom: 12,
+        zoom: EMPTY_ZOOM,
         scrollWheelZoom: true,
       });
       L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -228,7 +231,7 @@ export default function ResultsMap({ pins, selectedId, onSelect, searchId, layer
       }
     } else {
       boundsRef.current = null;
-      map.setView(SJ_CENTER, 12);
+      map.setView(SJ_CENTER, EMPTY_ZOOM);
     }
   }, [mapEpoch, pins]);
 
@@ -253,7 +256,7 @@ export default function ResultsMap({ pins, selectedId, onSelect, searchId, layer
       ref={divRef}
       className="leaflet-host"
       role="region"
-      aria-label={layer === "land" ? "Mapa de lotes" : "Mapa de resultados"}
+      aria-label={layer === "land" ? "Mappa dei terreni" : "Mappa dei risultati"}
       data-layer={layer}
     />
   );

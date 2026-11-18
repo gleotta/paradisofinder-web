@@ -190,6 +190,22 @@ export interface ZoneRef {
  * USD, como `zone_ref`. En los niveles de zona el valor es exactamente el de
  * `zone_ref` del mismo aviso.
  */
+/**
+ * Contexto de precio — mercado italia (contrato P2 §4.9, 18/11). Tres números
+ * comparables, siempre en €/m² (alquiler: €/m² al mes), cada referencia con
+ * la cantidad de avisos que forman la mediana. Lo calcula P3; P2 lo lee.
+ */
+export interface PriceContext {
+  /** `sqm` = venta · `sqm_month` = alquiler mensual. */
+  unit: "sqm" | "sqm_month";
+  /** €/m² del inmueble; null sin superficie. */
+  own: number | null;
+  /** Avisos de la misma operación y tipo alrededor: a 1 km o, sin muestra, a 3 km. null = no hay. */
+  radius: { value: number; sample: number | null; radius_km: number } | null;
+  /** El comune (`zona`) o, sin muestra, su provincia. null = sin referencia. */
+  zone: { value: number; sample: number | null; level: "zona" | "provincia" | "macro_zona"; place: string | null } | null;
+}
+
 export interface PriceRef {
   /** `radius` = avisos alrededor (ver `radius_km`) · `zona` · `macro_zona` · `provincia` (vocabulario de `zone_ref.fallback`). */
   level: string;
@@ -350,6 +366,8 @@ export interface Card {
   zone_ref?: ZoneRef | null;
   /** LA referencia de precio (31/10): la única que se muestra. null = sin referencia, sin caer a `zone_ref`. */
   price_ref?: PriceRef | null;
+  /** Italia (18/11): €/m² del inmueble, de lo que lo rodea y de su comune. Lo que se muestra en este sitio. */
+  price_context?: PriceContext | null;
   /**
    * Lotes (contrato 13/09 §4.4): la celda zonal que P2 usó para el gap del
    * lote. Sirvió de respaldo del bloque Zona hasta el 31/10; desde entonces

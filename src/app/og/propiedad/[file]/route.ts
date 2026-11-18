@@ -32,7 +32,7 @@ const SIZE: Record<Variant, { width: number; height: number; quality: number }> 
 const file = (id: string, variant: Variant) => cachePath("og", variant === "thumb" ? `${id}.t.jpg` : `${id}.jpg`);
 
 function notFound() {
-  return new Response("Imagen no disponible", {
+  return new Response("Immagine non disponibile", {
     status: 404,
     headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=300" },
   });

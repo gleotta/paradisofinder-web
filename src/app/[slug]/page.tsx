@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { MARKET_CONFIG } from "@/lib/market";
 import PropertyCard from "@/components/PropertyCard";
 import LandingTracker from "@/components/LandingTracker";
 import { fmtInt } from "@/lib/format";
@@ -47,6 +48,8 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 export default async function LandingPage({ params }: { params: Params }) {
   const { slug } = await params;
   const combo = parseSlug(slug);
+  // Las landings SEO son del catálogo de san_juan (`modules.seoLandings`).
+  if (!MARKET_CONFIG.modules.seoLandings) notFound();
   if (!combo || !isPublishedSlug(slug)) notFound();
   const live = await getLanding(slug);
   if (live && live.total === 0) notFound();

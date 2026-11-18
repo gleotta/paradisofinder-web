@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { IS_ITALIA } from "@/lib/market";
 
 /**
  * Web App Manifest (15/09): nombre, colores e íconos para el acceso directo en
@@ -11,6 +12,23 @@ import type { MetadataRoute } from "next";
  * rasters salen del mismo SVG con el mismo script.
  */
 export default function manifest(): MetadataRoute.Manifest {
+  if (IS_ITALIA) {
+    return {
+      name: "finder Italia",
+      short_name: "finder",
+      description: "Case in vendita e in affitto: scrivi quello che cerchi con parole tue.",
+      lang: "it-IT",
+      start_url: "/",
+      scope: "/",
+      display: "standalone",
+      theme_color: "#0B2545",
+      background_color: "#F5F6F8",
+      icons: [
+        { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+        { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+      ],
+    };
+  }
   return {
     name: "FINDER · San Juan",
     short_name: "FINDER",

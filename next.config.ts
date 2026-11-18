@@ -18,13 +18,33 @@ const securityHeaders = [
   { key: "X-DNS-Prefetch-Control", value: "on" },
 ];
 
+// Mercado del build (`src/lib/market.ts`). En italia las rutas públicas son
+// italianas y sirven las MISMAS páginas por rewrite; la ruta española, pedida
+// a mano, redirige a la italiana (los redirects solo miran la URL entrante,
+// así que el rewrite no vuelve a caer en ellos).
+const IS_ITALIA = process.env.NEXT_PUBLIC_MARKET !== "san_juan";
+
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
+  async rewrites() {
+    if (!IS_ITALIA) return [];
+    return [
+      { source: "/cerca", destination: "/buscar" },
+      { source: "/immobile/:id", destination: "/propiedad/:id" },
+    ];
+  },
   async redirects() {
+    if (IS_ITALIA) {
+      return [
+        { source: "/buscar", destination: "/cerca", permanent: true },
+        { source: "/propiedad/:id", destination: "/immobile/:id", permanent: true },
+        { source: "/dettaglio/:id", destination: "/immobile/:id", permanent: true },
+      ];
+    }
     return [
       // El MCP de P2 armaba el link del detalle como `/dettaglio/<id>` (404 en
       // producción hasta el 01/11). P2 ya lo corrigió a `/propiedad/<id>`; esto

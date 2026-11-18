@@ -1,5 +1,7 @@
 import "server-only";
 
+import { MARKET_CONFIG } from "@/lib/market";
+
 /**
  * Contacto para inmobiliarias/dueños que quieran publicar (MVP beta, 05/09):
  * botón "Publicá tu propiedad" → WhatsApp. El número vive en env del server
@@ -21,7 +23,7 @@ export function finderWhatsAppDigits(): string | null {
  * WhatsApp. Sin env: el dominio de producción.
  */
 export function siteUrl(): string {
-  const raw = process.env.SITE_URL?.trim() || "https://paradisofinder.com";
+  const raw = process.env.SITE_URL?.trim() || MARKET_CONFIG.defaultSiteUrl;
   return raw.replace(/\/$/, "");
 }
 

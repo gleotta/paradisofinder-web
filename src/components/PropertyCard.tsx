@@ -13,7 +13,7 @@ import {
   fmtKm,
   mainPrice,
   positionInfo,
-  positionMissingReason,
+  priceContextInfo,
   pricePerSqm,
   priceTrendInfo,
   roomSpecsLine,
@@ -22,9 +22,10 @@ import {
   zoneName,
   zoneRefInfo,
 } from "@/lib/format";
-import { detailHref, EVENTS, trackCardClick, trackEvent, type CardOrigin } from "@/lib/track";
+import { detailHref, trackCardClick, type CardOrigin } from "@/lib/track";
 import ContactButton from "./ContactButton";
 import ShareButton from "./ShareButton";
+import { PriceContextStrip } from "./PriceContext";
 import { EstimateBlock, EstimateNotice, PositionBlock, TrendPill, ZoneBlock } from "./signals";
 
 /** Chips visibles antes del "+N" (guía 29/09 §2.3). */
@@ -90,7 +91,7 @@ function PropertyCardBase({
   const layout = cardVertical(card, vertical);
   const isRoom = card.property_type === "room";
   const isLand = card.property_type === "land";
-  const title = `${PROPERTY_TYPE_LABEL[card.property_type] ?? "Propiedad"} en ${zoneName(card.zone)}`;
+  const title = `${PROPERTY_TYPE_LABEL[card.property_type] ?? "Immobile"} a ${zoneName(card.zone)}`;
   const address = clean(card.address);
   const secondary = secondaryPrice(card);
   const sqm = pricePerSqm(card);
@@ -98,14 +99,13 @@ function PropertyCardBase({
   const distance = card.distance_km != null ? `a ${fmtKm(card.distance_km)}` : null;
   const priceRefs = [secondary ? `(${secondary})` : null, sqm].filter(Boolean).join(" · ");
   const photoUrl = clean(card.photo_url);
-  const listingUrl = clean(card.listing_url);
-  const sourceName = clean(card.sources?.[0]?.name);
 
   const trend = priceTrendInfo(card);
   const position = positionInfo(card);
-  // Sin gap, la card dice por qué con el motivo de P2/P3 (nunca un hueco mudo).
-  const positionMissing = position ? null : positionMissingReason(card);
-  const zone = zoneRefInfo(card, layout);
+  // Italia (18/11): el precio al m² del inmueble, de lo que lo rodea y de su
+  // comune va en una sola tira; con ella, el bloque Zona no se repite.
+  const priceContext = priceContextInfo(card);
+  const zone = priceContext ? null : zoneRefInfo(card, layout);
   const estimate = layout === "invertir" ? estimateInfo(card) : null;
   const dates = cardDates(card);
 
@@ -145,17 +145,17 @@ function PropertyCardBase({
                 {/* P2 manda relevance_score > 1 en algunas related (visto 05/09: "104%"):
                     el porcentaje solo se muestra cuando está en 0–1. */}
                 {card.relevance_score != null && card.relevance_score <= 1
-                  ? `Similar · ${Math.round(card.relevance_score * 100)}%`
-                  : "Similar"}
+                  ? `Simile · ${Math.round(card.relevance_score * 100)}%`
+                  : "Simile"}
               </span>
             )}
-            {card.is_duplex === true && <span className="pbadge">Dúplex</span>}
+            {card.is_duplex === true && <span className="pbadge">Duplex</span>}
           </div>
           {/* Derecha: clase del lote y antigüedad / vigencia. */}
           <div className="pcard-flags">
             {isLand && (
               <span className="pbadge pbadge--land" data-testid="land-class">
-                {card.land_class ? LAND_CLASS_LABEL[card.land_class] : "Lote"}
+                {card.land_class ? LAND_CLASS_LABEL[card.land_class] : "Terreno"}
               </span>
             )}
             {flags.map((label) => (
@@ -174,7 +174,7 @@ function PropertyCardBase({
           <span className="pcard-price">{mainPrice(card)}</span>
           <span
             className="pcard-price-refs"
-            title={sqm && card.total_area_basis === true ? "Precio por m² sobre la superficie total: el aviso no publica la cubierta" : undefined}
+            title={sqm && card.total_area_basis === true ? "Prezzo al m² sulla superficie totale: l'annuncio non indica quella coperta" : undefined}
           >
             {priceRefs || " "}
           </span>
@@ -192,7 +192,7 @@ function PropertyCardBase({
 
         {why && (
           <p className="pcard-reason" data-testid="pick-reason">
-            <span className="pcard-reason-k">Por qué</span>
+            <span className="pcard-reason-k">Perché</span>
             {why}
           </p>
         )}
@@ -204,11 +204,7 @@ function PropertyCardBase({
             onSimilarsClick={() => trackCardClick(card, from, rank, "similars")}
           />
         )}
-        {positionMissing && (
-          <p className="pcard-noposition" data-testid="position-missing">
-            {positionMissing}
-          </p>
-        )}
+        {priceContext && <PriceContextStrip info={priceContext} />}
         {zone && <ZoneBlock info={zone} />}
         {estimate && <EstimateBlock info={estimate} />}
 
@@ -232,28 +228,18 @@ function PropertyCardBase({
         </div>
 
         <div className="pcard-bottom">
-          <EstimateNotice />
+          {/* Italia (18/11): el sitio es un buscador. La card muestra el precio frente
+              a similares y el de la zona cuando existen; el aviso de "valores
+              estimados" acompaña solo a esos bloques. */}
+          {(position || zone || estimate || priceContext?.hasRefs) && <EstimateNotice />}
 
           <div className="pcard-actions">
             <ContactButton card={card} rank={rank} from={from} />
-            {listingUrl && (
-              <a
-                className="source-link"
-                href={listingUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() =>
-                  trackEvent(EVENTS.SOURCE_CLICK, { property_id: card.id, rank, position: rank, url: listingUrl, from })
-                }
-              >
-                Ver aviso original ↗
-              </a>
-            )}
           </div>
 
           <div className="pcard-foot">
             <span className="pcard-foot-meta">
-              {[sourceName, card.publisher ? PUBLISHER_LABEL[card.publisher] : null].filter(Boolean).join(" · ") || " "}
+              {(card.publisher ? PUBLISHER_LABEL[card.publisher] : null) || " "}
             </span>
           </div>
         </div>

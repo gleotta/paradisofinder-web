@@ -73,10 +73,10 @@ export default function DetailMap({
   const googleMaps = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
   const note =
     confidence === "high"
-      ? "Ubicación marcada en el aviso."
+      ? "Posizione indicata nell'annuncio."
       : confidence === "medium"
-        ? "Ubicación aproximada, a partir de la dirección del aviso."
-        : "Ubicación aproximada.";
+        ? "Posizione approssimativa, ricavata dall'indirizzo dell'annuncio."
+        : "Posizione approssimativa.";
 
   return (
     <div data-testid="detail-map" data-confidence={confidence ?? ""}>
@@ -84,7 +84,7 @@ export default function DetailMap({
         ref={divRef}
         className="detail-map"
         role="region"
-        aria-label={approximate ? "Mapa con la zona aproximada de la propiedad" : "Mapa con la ubicación de la propiedad"}
+        aria-label={approximate ? "Mappa con la zona approssimativa dell'immobile" : "Mappa con la posizione dell'immobile"}
       />
       <div className="detail-map-foot">
         <span>{note}</span>
@@ -94,7 +94,7 @@ export default function DetailMap({
           rel="noopener noreferrer"
           onClick={() => trackEvent(EVENTS.DETAIL_MAP_EXTERNAL, { property_id: propertyId, confidence: confidence ?? null })}
         >
-          Abrir en Google Maps ↗
+          Apri in Google Maps ↗
         </a>
       </div>
     </div>

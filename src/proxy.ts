@@ -42,8 +42,8 @@ import { NextResponse, type NextRequest } from "next/server";
 const OLD_HOST = "finder.paradisoestate.com";
 const CANONICAL_ORIGIN = "https://paradisofinder.com";
 
-/** Rutas que no son HTML: sin CSP. `/icons/` son los PNG del manifest (public/); `/og/`, las og:image. */
-const NO_CSP_PREFIX = /^\/(?:api|_next\/static|_next\/image|icons|og)(?:\/|$)/;
+/** Rutas que no son HTML: sin CSP. `/icons/` son los PNG del manifest (public/); `/og/`, las og:image; `/mcp`, el puente del plugin MCP (italia, 18/11). */
+const NO_CSP_PREFIX = /^\/(?:api|mcp|_next\/static|_next\/image|icons|og)(?:\/|$)/;
 const ICON_FILES = new Set(["/favicon.ico", "/icon.svg", "/apple-icon.png", "/manifest.webmanifest"]);
 
 function requestHost(request: NextRequest): string {

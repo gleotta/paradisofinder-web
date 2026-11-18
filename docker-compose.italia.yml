@@ -1,0 +1,39 @@
+# P1 del mercado ITALIA en local (17/11 — rama `italia`).
+#
+#   ./scripts/levantar_italia.sh           construye y levanta en :3010
+#   ./scripts/levantar_italia.sh --bajar   baja el stack
+#
+# Stack propio (proyecto `finder-web-italia`, imagen `finder-web-italia`): no
+# pisa el de San Juan (:3000). Necesita P2 Italia levantado en :8010
+# (`paradisofinder-core-italia/scripts/levantar_italia.sh`).
+#
+# El mercado es una constante del BUILD (`NEXT_PUBLIC_MARKET`), por eso va en
+# `build.args` y no en `environment`. Paleta: `ITALIA_THEME=era` cambia a los
+# colores de ERA (default: azul).
+services:
+  web:
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_MARKET: italia
+        NEXT_PUBLIC_THEME: ${ITALIA_THEME:-}
+    image: finder-web-italia:latest
+    container_name: finder-web-italia
+    ports:
+      - "${ITALIA_WEB_PORT:-3010}:3000"
+    environment:
+      P2_BASE_URL: http://host.docker.internal:${ITALIA_P2_PORT:-8010}
+      P2_API_KEY: ${P2_API_KEY:-}
+      P2_MODE: live
+      SITE_URL: ${ITALIA_SITE_URL:-http://localhost:3010}
+      EVENTS_LOG_DIR: /data/logs
+      CACHE_DIR: /data/cache
+      INVEST_ANALYSIS_ENABLED: "false"
+    volumes:
+      - finder-web-italia-data:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  finder-web-italia-data:

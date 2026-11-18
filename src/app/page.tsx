@@ -1,6 +1,8 @@
 import SearchHero from "@/components/SearchHero";
 import PublishCta from "@/components/PublishCta";
 import { publishWhatsAppHref } from "@/lib/server/contact";
+import { IS_ITALIA } from "@/lib/market";
+import HomeItalia from "@/markets/italia/HomeItalia";
 
 /**
  * Pantalla 1 — Home (producto §3, ajustada por el cambio del 29/08:
@@ -14,6 +16,8 @@ import { publishWhatsAppHref } from "@/lib/server/contact";
  * Debajo, el bloque para inmobiliarias/dueños que quieran publicar (05/09).
  */
 export default function HomePage() {
+  // italia tiene su propia home (`src/markets/italia/HomeItalia.tsx`).
+  if (IS_ITALIA) return <HomeItalia />;
   return (
     <main>
       <section className="hero container">

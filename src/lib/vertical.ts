@@ -28,15 +28,26 @@
  */
 
 import type { Summary } from "./p2/types";
+import { t } from "./i18n";
+import { MARKET_CONFIG } from "./market";
 
 export type VerticalId = "alquilar" | "comprar" | "invertir" | "lotes";
 
-export const VERTICALS: { id: VerticalId; label: string }[] = [
-  { id: "alquilar", label: "Alquilar" },
-  { id: "comprar", label: "Comprar" },
-  { id: "invertir", label: "Invertir" },
-  { id: "lotes", label: "Lotes" },
+const ALL_VERTICALS: { id: VerticalId; label: string }[] = [
+  // Compra primero: es la búsqueda por defecto del sitio de Italia.
+  { id: "comprar", label: t("Comprar") },
+  { id: "alquilar", label: t("Alquilar") },
+  { id: "invertir", label: t("Invertir") },
+  { id: "lotes", label: t("Lotes") },
 ];
+
+/** Verticales del selector en este mercado (italia: solo Compra y Affitta —
+ *  `modules` de `src/lib/market.ts`). El id es interno; la etiqueta, del mercado. */
+export const VERTICALS: { id: VerticalId; label: string }[] = ALL_VERTICALS.filter(
+  (v) =>
+    (v.id !== "invertir" || MARKET_CONFIG.modules.invest) &&
+    (v.id !== "lotes" || MARKET_CONFIG.modules.landVertical),
+);
 
 export function isVerticalId(v: unknown): v is VerticalId {
   return v === "alquilar" || v === "comprar" || v === "invertir" || v === "lotes";
@@ -51,10 +62,10 @@ export function isVerticalId(v: unknown): v is VerticalId {
  * lotes en venta" → `vertical: land` con zona y presupuesto intactos.
  */
 export const VERTICAL_PHRASE: Record<Exclude<VerticalId, "invertir">, string> = {
-  alquilar: "para alquilar",
-  comprar: "para comprar",
+  alquilar: t("para alquilar"),
+  comprar: t("para comprar"),
   // Invertir no va por frase (02/11): ver `prepareTurn` en el server.
-  lotes: "lotes en venta",
+  lotes: t("lotes en venta"),
 };
 
 /**
@@ -95,7 +106,8 @@ export function verticalFromSummary(s: Pick<Summary, "vertical" | "hard_filters"
   if (typeof code === "string" && code in VERTICAL_BY_CODE) return VERTICAL_BY_CODE[code];
   const label = s?.vertical?.trim().toLowerCase() ?? "";
   if (/lote|terreno/.test(label)) return "lotes";
-  if (label === "alquiler") return "alquilar";
+  if (label === "alquiler" || label === "affitto") return "alquilar";
+  if (label === "vendita") return "comprar";
   if (/^compra para inversi/.test(label)) return "invertir";
   if (label === "compra") return "comprar";
   return null;

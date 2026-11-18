@@ -1,116 +1,248 @@
 [
   {
-    "code": "capital",
-    "name": "Capital",
-    "slug": "capital",
-    "macro": "gran_san_juan"
+    "code": "albano_laziale",
+    "name": "Albano Laziale",
+    "slug": "albano-laziale",
+    "macro": "Lazio"
   },
   {
-    "code": "rivadavia",
-    "name": "Rivadavia",
-    "slug": "rivadavia",
-    "macro": "gran_san_juan"
+    "code": "anzio",
+    "name": "Anzio",
+    "slug": "anzio",
+    "macro": "Lazio"
   },
   {
-    "code": "rawson",
-    "name": "Rawson",
-    "slug": "rawson",
-    "macro": "gran_san_juan"
+    "code": "aprilia",
+    "name": "Aprilia",
+    "slug": "aprilia",
+    "macro": "Lazio"
   },
   {
-    "code": "santa_lucia",
-    "name": "Santa Lucía",
-    "slug": "santa-lucia",
-    "macro": "gran_san_juan"
+    "code": "ardea",
+    "name": "Ardea",
+    "slug": "ardea",
+    "macro": "Lazio"
   },
   {
-    "code": "chimbas",
-    "name": "Chimbas",
-    "slug": "chimbas",
-    "macro": "gran_san_juan"
+    "code": "ariccia",
+    "name": "Ariccia",
+    "slug": "ariccia",
+    "macro": "Lazio"
   },
   {
-    "code": "pocito",
-    "name": "Pocito",
-    "slug": "pocito",
-    "macro": "gran_san_juan"
+    "code": "campagnano_di_roma",
+    "name": "Campagnano di Roma",
+    "slug": "campagnano-di-roma",
+    "macro": "Lazio"
   },
   {
-    "code": "albardon",
-    "name": "Albardón",
-    "slug": "albardon",
-    "macro": "periferia"
+    "code": "capena",
+    "name": "Capena",
+    "slug": "capena",
+    "macro": "Lazio"
   },
   {
-    "code": "angaco",
-    "name": "Angaco",
-    "slug": "angaco",
-    "macro": "periferia"
+    "code": "civitella_d_agliano",
+    "name": "Civitella d'Agliano",
+    "slug": "civitella-d-agliano",
+    "macro": "Lazio"
   },
   {
-    "code": "san_martin",
-    "name": "San Martín",
-    "slug": "san-martin",
-    "macro": "periferia"
+    "code": "pomezia",
+    "name": "Pomezia",
+    "slug": "pomezia",
+    "macro": "Lazio"
   },
   {
-    "code": "nueve_de_julio",
-    "name": "9 de Julio",
-    "slug": "9-de-julio",
-    "macro": "periferia"
+    "code": "ponza",
+    "name": "Ponza",
+    "slug": "ponza",
+    "macro": "Lazio"
   },
   {
-    "code": "caucete",
-    "name": "Caucete",
-    "slug": "caucete",
-    "macro": "periferia"
+    "code": "rocca_priora",
+    "name": "Rocca Priora",
+    "slug": "rocca-priora",
+    "macro": "Lazio"
   },
   {
-    "code": "veinticinco_de_mayo",
-    "name": "25 de Mayo",
-    "slug": "25-de-mayo",
-    "macro": "periferia"
+    "code": "roma",
+    "name": "Roma",
+    "slug": "roma",
+    "macro": "Lazio"
   },
   {
-    "code": "sarmiento",
-    "name": "Sarmiento",
-    "slug": "sarmiento",
-    "macro": "periferia"
+    "code": "sambuci",
+    "name": "Sambuci",
+    "slug": "sambuci",
+    "macro": "Lazio"
   },
   {
-    "code": "zonda",
-    "name": "Zonda",
-    "slug": "zonda",
-    "macro": "periferia"
+    "code": "velletri",
+    "name": "Velletri",
+    "slug": "velletri",
+    "macro": "Lazio"
   },
   {
-    "code": "ullum",
-    "name": "Ullum",
-    "slug": "ullum",
-    "macro": "periferia"
+    "code": "borghetto_lodigiano",
+    "name": "Borghetto Lodigiano",
+    "slug": "borghetto-lodigiano",
+    "macro": "Lombardia"
   },
   {
-    "code": "calingasta",
-    "name": "Calingasta",
-    "slug": "calingasta",
-    "macro": "alejado"
+    "code": "casorate_primo",
+    "name": "Casorate Primo",
+    "slug": "casorate-primo",
+    "macro": "Lombardia"
   },
   {
-    "code": "iglesia",
-    "name": "Iglesia",
-    "slug": "iglesia",
-    "macro": "alejado"
+    "code": "castellanza",
+    "name": "Castellanza",
+    "slug": "castellanza",
+    "macro": "Lombardia"
   },
   {
-    "code": "jachal",
-    "name": "Jáchal",
-    "slug": "jachal",
-    "macro": "alejado"
+    "code": "landriano",
+    "name": "Landriano",
+    "slug": "landriano",
+    "macro": "Lombardia"
   },
   {
-    "code": "valle_fertil",
-    "name": "Valle Fértil",
-    "slug": "valle-fertil",
-    "macro": "alejado"
+    "code": "milano",
+    "name": "Milano",
+    "slug": "milano",
+    "macro": "Lombardia"
+  },
+  {
+    "code": "ossago_lodigiano",
+    "name": "Ossago Lodigiano",
+    "slug": "ossago-lodigiano",
+    "macro": "Lombardia"
+  },
+  {
+    "code": "rho",
+    "name": "Rho",
+    "slug": "rho",
+    "macro": "Lombardia"
+  },
+  {
+    "code": "somma_lombardo",
+    "name": "Somma Lombardo",
+    "slug": "somma-lombardo",
+    "macro": "Lombardia"
+  },
+  {
+    "code": "baunei",
+    "name": "Baunei",
+    "slug": "baunei",
+    "macro": "Sardegna"
+  },
+  {
+    "code": "olbia",
+    "name": "Olbia",
+    "slug": "olbia",
+    "macro": "Sardegna"
+  },
+  {
+    "code": "san_teodoro",
+    "name": "San Teodoro",
+    "slug": "san-teodoro",
+    "macro": "Sardegna"
+  },
+  {
+    "code": "aci_catena",
+    "name": "Aci Catena",
+    "slug": "aci-catena",
+    "macro": "Sicilia"
+  },
+  {
+    "code": "agira",
+    "name": "Agira",
+    "slug": "agira",
+    "macro": "Sicilia"
+  },
+  {
+    "code": "catania",
+    "name": "Catania",
+    "slug": "catania",
+    "macro": "Sicilia"
+  },
+  {
+    "code": "custonaci",
+    "name": "Custonaci",
+    "slug": "custonaci",
+    "macro": "Sicilia"
+  },
+  {
+    "code": "erice",
+    "name": "Erice",
+    "slug": "erice",
+    "macro": "Sicilia"
+  },
+  {
+    "code": "favignana",
+    "name": "Favignana",
+    "slug": "favignana",
+    "macro": "Sicilia"
+  },
+  {
+    "code": "gagliano_castelferrato",
+    "name": "Gagliano Castelferrato",
+    "slug": "gagliano-castelferrato",
+    "macro": "Sicilia"
+  },
+  {
+    "code": "giardini_naxos",
+    "name": "Giardini-Naxos",
+    "slug": "giardini-naxos",
+    "macro": "Sicilia"
+  },
+  {
+    "code": "mazara_del_vallo",
+    "name": "Mazara del Vallo",
+    "slug": "mazara-del-vallo",
+    "macro": "Sicilia"
+  },
+  {
+    "code": "nicolosi",
+    "name": "Nicolosi",
+    "slug": "nicolosi",
+    "macro": "Sicilia"
+  },
+  {
+    "code": "pedara",
+    "name": "Pedara",
+    "slug": "pedara",
+    "macro": "Sicilia"
+  },
+  {
+    "code": "san_giovanni_la_punta",
+    "name": "San Giovanni la Punta",
+    "slug": "san-giovanni-la-punta",
+    "macro": "Sicilia"
+  },
+  {
+    "code": "trapani",
+    "name": "Trapani",
+    "slug": "trapani",
+    "macro": "Sicilia"
+  },
+  {
+    "code": "trecastagni",
+    "name": "Trecastagni",
+    "slug": "trecastagni",
+    "macro": "Sicilia"
+  },
+  {
+    "code": "terni",
+    "name": "Terni",
+    "slug": "terni",
+    "macro": "Umbria"
+  },
+  {
+    "code": "peschiera_del_garda",
+    "name": "Peschiera del Garda",
+    "slug": "peschiera-del-garda",
+    "macro": "Veneto"
   }
 ]

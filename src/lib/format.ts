@@ -18,6 +18,7 @@ import {
   type CardVertical,
 } from "./labels";
 import { zoneDisplay } from "./zones";
+import PROVINCE from "@/data/province.json";
 
 /**
  * Reasons del rating de precio. P2 real expone `deal_rating_reasons`
@@ -42,8 +43,10 @@ export function clean(value: unknown): string | null {
   return v;
 }
 
-const nf = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 });
-const nf1 = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 1 });
+// `useGrouping: "always"`: en it-IT los números de 4 cifras salen sin punto
+// ("2100"); los precios se escriben siempre con separador ("€ 2.100").
+const nf = new Intl.NumberFormat("it-IT", { maximumFractionDigits: 0, useGrouping: "always" });
+const nf1 = new Intl.NumberFormat("it-IT", { maximumFractionDigits: 1, useGrouping: "always" });
 
 export function fmtInt(n: number): string {
   return nf.format(n);
@@ -56,7 +59,7 @@ export function fmtPct(n: number, withSign = false): string {
 
 /** Prefijo por moneda. Sin moneda informada (el Swagger la admite null en comparables) va el número solo. */
 export function fmtMoney(amount: number, currency: Currency | null | undefined): string {
-  const prefix = currency === "USD" ? "US$ " : currency === "EUR" ? "€ " : currency === "ARS" ? "$ " : "";
+  const prefix = currency === "USD" ? "€ " : currency === "EUR" ? "€ " : currency === "ARS" ? "$ " : "";
   return `${prefix}${nf.format(amount)}`;
 }
 
@@ -65,7 +68,7 @@ export function mainPrice(card: Pick<Card, "price" | "currency" | "operation" | 
   const base = fmtMoney(card.price, card.currency);
   if (card.operation !== "rent") return base;
   // null = no informado → asumir mensual (sin comparar entre periodicidades).
-  const suffix = card.rental_period ? RENTAL_PERIOD_SUFFIX[card.rental_period] : "/mes";
+  const suffix = card.rental_period ? RENTAL_PERIOD_SUFFIX[card.rental_period] : "/mese";
   return `${base} ${suffix}`;
 }
 
@@ -78,7 +81,7 @@ export function secondaryPrice(
   card: Pick<Card, "currency" | "operation" | "price_usd" | "price_ars">,
 ): string | null {
   if (card.currency === "ARS" && card.price_usd != null) {
-    return `≈ US$ ${nf.format(card.price_usd)}`;
+    return `≈ € ${nf.format(card.price_usd)}`;
   }
   if (card.currency === "USD" && card.price_ars != null) {
     return `≈ $ ${nf.format(card.price_ars)}`;
@@ -87,7 +90,7 @@ export function secondaryPrice(
 }
 
 /** Rótulo corto del m² medido sobre la superficie total (el aviso no publica la cubierta). */
-const TOTAL_BASIS_SUFFIX = " total";
+const TOTAL_BASIS_SUFFIX = " totali";
 
 /**
  * Precio por m²: en VENTAS de vivienda, `price_per_sqm` (sobre cubierta);
@@ -97,39 +100,131 @@ const TOTAL_BASIS_SUFFIX = " total";
  * card, "sobre superficie total" en el detalle (`long`).
  */
 export function pricePerSqm(
-  card: Pick<Card, "operation" | "price_per_sqm" | "property_type" | "price_per_sqm_land" | "price_per_hectare" | "total_area_basis">,
+  card: Pick<Card, "operation" | "price_per_sqm" | "property_type" | "price_per_sqm_land" | "price_per_hectare" | "total_area_basis" | "price_context">,
   { long = false }: { long?: boolean } = {},
 ): string | null {
   if (card.property_type === "land") {
-    if (card.price_per_hectare != null) return `US$ ${nf.format(card.price_per_hectare)}/ha`;
+    if (card.price_per_hectare != null) return `€ ${nf.format(card.price_per_hectare)}/ha`;
     if (card.price_per_sqm_land != null) {
-      // El decimal solo aporta en valores chicos ("US$ 2,3/m²").
+      // El decimal solo aporta en valores chicos ("€ 2,3/m²").
       const v = card.price_per_sqm_land;
-      return `US$ ${(v >= 10 ? nf : nf1).format(v)}/m²`;
+      return `€ ${(v >= 10 ? nf : nf1).format(v)}/m²`;
     }
     return null;
   }
-  if (card.operation !== "sale" || card.price_per_sqm == null) return null;
-  const basis = card.total_area_basis === true ? (long ? " sobre superficie total" : TOTAL_BASIS_SUFFIX) : "";
-  return `US$ ${nf.format(card.price_per_sqm)}/m²${basis}`;
+  // Affitto (18/11): il canone al m² lo manda P2 in `price_context` (mensile).
+  if (card.operation === "rent") {
+    const own = card.price_context?.unit === "sqm_month" ? card.price_context.own : null;
+    return own != null ? `€ ${fmtSqmValue(own)}/m² al mese` : null;
+  }
+  const perSqm = card.price_per_sqm ?? card.price_context?.own ?? null;
+  if (card.operation !== "sale" || perSqm == null) return null;
+  const basis = card.total_area_basis === true ? (long ? " sulla superficie totale" : TOTAL_BASIS_SUFFIX) : "";
+  return `€ ${nf.format(perSqm)}/m²${basis}`;
+}
+
+/** Valore al m²: senza decimali, salvo nei valori piccoli (canoni, "€ 16,7"). */
+export function fmtSqmValue(v: number): string {
+  return (v >= 100 ? nf : nf1).format(v);
+}
+
+export interface PriceContextCell {
+  kind: "own" | "radius" | "zone";
+  /** Etichetta lunga (scheda): "Questo immobile", "Entro 1 km", "A Roma". */
+  label: string;
+  /** Etichetta corta (card): "Immobile", "1 km", "Roma". */
+  short: string;
+  /** "€ 3.242" — senza l'unità, che va nel titolo del blocco. null = senza dato. */
+  value: string | null;
+  /** "4 annunci simili" e, nel raggio allargato, perché non è 1 km. */
+  note: string | null;
+  /** Testo al posto del valore quando manca. */
+  missing: string | null;
+}
+
+export interface PriceContextInfo {
+  /** "Prezzo al m²" (vendita) · "Canone al m² al mese" (affitto). */
+  title: string;
+  /** Suffisso dell'unità per i valori della scheda: "/m²" · "/m² al mese". */
+  unit: string;
+  cells: PriceContextCell[];
+  /** C'è almeno un riferimento (raggio o zona) oltre al valore dell'immobile. */
+  hasRefs: boolean;
+}
+
+function sampleLabel(n: number | null | undefined): string | null {
+  return n == null ? null : n === 1 ? "1 annuncio simile" : `${fmtInt(n)} annunci simili`;
+}
+
+/**
+ * Il prezzo al m² dell'immobile, quello degli annunci simili intorno e quello
+ * del suo comune (Italia, 18/11 — `price_context` di P2). Le tre celle ci sono
+ * SEMPRE: quando un riferimento manca si dice, non si nasconde. null = P2 non
+ * manda il contesto (terreni, stanze, tariffe al giorno).
+ */
+export function priceContextInfo(
+  card: Pick<Card, "price_context" | "zone" | "operation">,
+): PriceContextInfo | null {
+  const ctx = card.price_context ?? null;
+  if (!ctx) return null;
+  const rent = ctx.unit === "sqm_month";
+  const money = (v: number) => `€ ${fmtSqmValue(v)}`;
+  const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
+  const own: PriceContextCell = {
+    kind: "own", label: "Questo immobile", short: "Immobile",
+    value: ctx.own != null ? money(ctx.own) : null, note: null,
+    missing: ctx.own != null ? null : "Superficie non indicata",
+  };
+
+  const r = ctx.radius;
+  const wide = r != null && r.radius_km > 1;
+  const radius: PriceContextCell = r
+    ? {
+        kind: "radius", label: `Entro ${fmtKm(r.radius_km)}`, short: fmtKm(r.radius_km),
+        value: money(r.value),
+        note: [sampleLabel(r.sample), wide ? "entro 1 km sono troppo pochi" : null].filter(Boolean).join(" · ") || null,
+        missing: null,
+      }
+    : { kind: "radius", label: "Entro 1 km", short: "1 km", value: null, note: null, missing: "Troppo pochi annunci simili" };
+
+  const z = ctx.zone;
+  const comune = zoneName(card.zone);
+  const zone: PriceContextCell = z
+    ? z.level === "zona"
+      ? { kind: "zone", label: `A ${zoneName(z.place ?? card.zone)}`, short: zoneName(z.place ?? card.zone), value: money(z.value), note: sampleLabel(z.sample), missing: null }
+      : {
+          kind: "zone", label: capital(provinceWhere(z.place)), short: `Prov. ${(z.place ?? "").toUpperCase()}`.trim(),
+          value: money(z.value),
+          note: [sampleLabel(z.sample), `a ${comune} sono troppo pochi`].filter(Boolean).join(" · "),
+          missing: null,
+        }
+    : { kind: "zone", label: `A ${comune}`, short: comune, value: null, note: null, missing: "Troppo pochi annunci simili" };
+
+  return {
+    title: rent ? "Canone al m² al mese" : "Prezzo al m²",
+    unit: rent ? "/m² al mese" : "/m²",
+    cells: [own, radius, zone],
+    hasRefs: r != null || z != null,
+  };
 }
 
 export function miniCardPrice(mc: MiniCard): { main: string; secondary: string | null } {
   return {
     main: fmtMoney(mc.price, mc.currency),
-    secondary: mc.currency === "ARS" && mc.price_usd != null ? `≈ US$ ${nf.format(mc.price_usd)}` : null,
+    secondary: mc.currency === "ARS" && mc.price_usd != null ? `≈ € ${nf.format(mc.price_usd)}` : null,
   };
 }
 
-const nfCompact = new Intl.NumberFormat("es-AR", { notation: "compact", maximumFractionDigits: 1 });
+const nfCompact = new Intl.NumberFormat("it-IT", { notation: "compact", maximumFractionDigits: 1 });
 
 /**
- * Precio compacto para el marker del mapa ("US$ 65 mil", "$ 154 M").
+ * Precio compacto para el marker del mapa ("€ 65 mil", "$ 154 M").
  * Siempre el precio ORIGINAL del aviso (misma regla que el precio principal);
  * compacto es solo la notación, no una conversión.
  */
 export function compactPrice(card: Pick<Card, "price" | "currency">): string {
-  const prefix = card.currency === "USD" ? "US$ " : card.currency === "EUR" ? "€ " : "$ ";
+  const prefix = card.currency === "USD" ? "€ " : card.currency === "EUR" ? "€ " : "$ ";
   return `${prefix}${nfCompact.format(card.price)}`;
 }
 
@@ -139,11 +234,11 @@ export function compactPrice(card: Pick<Card, "price" | "currency">): string {
  * null → "San Juan" (el mercado).
  */
 export function zoneName(zone: string | null | undefined): string {
-  return zoneDisplay(clean(zone)) ?? "San Juan";
+  return zoneDisplay(clean(zone)) ?? "Italia";
 }
 
 export function fmtDaysOnMarket(days: number): string {
-  return days === 1 ? "1 día publicada" : `${nf.format(days)} días publicada`;
+  return days === 1 ? "1 giorno in catalogo" : `${nf.format(days)} giorni in catalogo`;
 }
 
 /**
@@ -151,24 +246,39 @@ export function fmtDaysOnMarket(days: number): string {
  * mes, después meses/años aproximados — la precisión al día no aporta y
  * "hace 1.622 días" no se lee.
  */
-export function fmtAgo(days: number): string {
-  if (days <= 0) return "hoy";
-  if (days === 1) return "ayer";
-  if (days < 45) return `hace ${days} días`;
+/** "oggi" · "ieri" · "55 giorni" · "4 mesi" · "2 anni": la duración sola, para
+ *  "In catalogo da …" (los días cuentan desde que FINDER vio el aviso: ERA no
+ *  publica la fecha de alta, por eso nunca se dice "pubblicato"). */
+export function fmtDaysShort(days: number): string {
+  if (days <= 0) return "oggi";
+  if (days === 1) return "ieri";
+  if (days < 45) return `${days} giorni`;
   if (days < 365) {
     const months = Math.round(days / 30);
-    return months <= 1 ? "hace 1 mes" : `hace ${months} meses`;
+    return months <= 1 ? "1 mese" : `${months} mesi`;
+  }
+  const years = Math.floor(days / 365);
+  return years === 1 ? "1 anno" : `${years} anni`;
+}
+
+export function fmtAgo(days: number): string {
+  if (days <= 0) return "oggi";
+  if (days === 1) return "ieri";
+  if (days < 45) return `${days} giorni fa`;
+  if (days < 365) {
+    const months = Math.round(days / 30);
+    return months <= 1 ? "1 mese fa" : `${months} mesi fa`;
   }
   const years = Math.floor(days / 365);
   const rest = Math.round((days - years * 365) / 30);
-  const y = years === 1 ? "1 año" : `${years} años`;
-  return rest >= 1 && years < 3 ? `hace ${y} y ${rest === 1 ? "1 mes" : `${rest} meses`}` : `hace ${y}`;
+  const y = years === 1 ? "1 anno" : `${years} anni`;
+  return rest >= 1 && years < 3 ? `${y} e ${rest === 1 ? "1 mese" : `${rest} mesi`} fa` : `${y} fa`;
 }
 
 export function fmtDate(iso: string): string {
   const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
   if (Number.isNaN(d.getTime())) return iso;
-  return new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "long", year: "numeric" }).format(d);
+  return new Intl.DateTimeFormat("it-IT", { day: "numeric", month: "long", year: "numeric" }).format(d);
 }
 
 export function fmtKm(km: number): string {
@@ -192,16 +302,16 @@ function hasArea(v: number | null | undefined): v is number {
 export function specsLine(card: Card): string {
   if (card.property_type === "land") return landSpecsLine(card);
   const parts: string[] = [];
-  if (card.rooms != null) parts.push(`${card.rooms} amb.`);
-  if (card.bedrooms != null) parts.push(`${card.bedrooms} dorm.`);
-  if (card.bathrooms != null) parts.push(card.bathrooms === 1 ? "1 baño" : `${card.bathrooms} baños`);
+  if (card.rooms != null) parts.push(`${card.rooms} ${card.rooms === 1 ? "locale" : "locali"}`);
+  if (card.bedrooms != null) parts.push(`${card.bedrooms} ${card.bedrooms === 1 ? "camera" : "camere"}`);
+  if (card.bathrooms != null) parts.push(card.bathrooms === 1 ? "1 bagno" : `${card.bathrooms} bagni`);
   const covered = hasArea(card.covered_area_sqm) ? card.covered_area_sqm : null;
-  if (covered != null) parts.push(`${nf.format(covered)} m² cub.`);
+  if (covered != null) parts.push(`${nf.format(covered)} m² coperti`);
   if (hasArea(card.area_sqm) && card.area_sqm !== covered) {
     const lot = covered != null && card.property_type === "house";
-    parts.push(`${nf.format(card.area_sqm)} m²${lot ? " lote" : ""}`);
+    parts.push(`${nf.format(card.area_sqm)} m²${lot ? " di terreno" : ""}`);
   }
-  if (card.floor != null) parts.push(`piso ${card.floor}`);
+  if (card.floor != null) parts.push(`piano ${card.floor}`);
   return parts.join(" · ");
 }
 
@@ -209,12 +319,12 @@ export function specsLine(card: Card): string {
 export function landSpecsLine(card: Card): string {
   const parts: string[] = [];
   if (hasArea(card.area_sqm)) {
-    parts.push(card.area_sqm >= 10000 ? `${nf1.format(card.area_sqm / 10000)} ha` : `${nf.format(card.area_sqm)} m² de lote`);
+    parts.push(card.area_sqm >= 10000 ? `${nf1.format(card.area_sqm / 10000)} ha` : `${nf.format(card.area_sqm)} m² di terreno`);
   }
   if (card.frontage_m != null && card.depth_m != null) {
     parts.push(`${nf1.format(card.frontage_m)} × ${nf1.format(card.depth_m)} m`);
   } else if (card.frontage_m != null) {
-    parts.push(`${nf1.format(card.frontage_m)} m de frente`);
+    parts.push(`${nf1.format(card.frontage_m)} m di fronte`);
   }
   return parts.join(" · ");
 }
@@ -223,15 +333,15 @@ export function landSpecsLine(card: Card): string {
 export function landServicesLabel(card: Pick<Card, "land_services" | "land_services_detail">): string | null {
   if (card.land_services !== true) return null;
   const detail = (card.land_services_detail ?? []).map((s) => LAND_SERVICE_LABEL[s] ?? s).filter(Boolean);
-  return detail.length ? `Con servicios: ${detail.join(", ")}` : "Con servicios";
+  return detail.length ? `Con servizi: ${detail.join(", ")}` : "Con servizi";
 }
 
 /** Para habitaciones: las camas son el mínimo de visibilidad, no los metros. */
 export function roomSpecsLine(card: Card): string {
   const parts: string[] = [];
-  if (card.beds != null) parts.push(card.beds === 1 ? "1 cama" : `${card.beds} camas`);
-  if (card.double_bed === true) parts.push("cama matrimonial");
-  if (card.private_bathroom === true) parts.push("baño privado");
+  if (card.beds != null) parts.push(card.beds === 1 ? "1 letto" : `${card.beds} letti`);
+  if (card.double_bed === true) parts.push("letto matrimoniale");
+  if (card.private_bathroom === true) parts.push("bagno privato");
   if (hasArea(card.area_sqm)) parts.push(`${nf.format(card.area_sqm)} m²`);
   return parts.join(" · ");
 }
@@ -331,14 +441,14 @@ export function positionInfo(
   const capped = card.valuation_gap_capped === true;
   const verify = card.deal_rating === "verify_data";
   const pct = fmtPctRound(gap);
-  const side = Math.round(Math.abs(gap)) === 0 ? null : gap > 0 ? "por debajo" : "por encima";
+  const side = Math.round(Math.abs(gap)) === 0 ? null : gap > 0 ? "sotto" : "sopra";
 
   let head: string;
-  if (verify) head = side ? `${side} · verificar el aviso` : "verificar el aviso";
-  else if (!side) head = "en línea con la zona";
+  if (verify) head = side ? `${side} · verifica l'annuncio` : "verifica l'annuncio";
+  else if (!side) head = "in linea con la zona";
   // Umbral de presentación, no de indicador: solo cambia la frase.
-  else if (Math.abs(gap) < 10) head = `${side} · en línea con la zona`;
-  else head = `${side} de similares`;
+  else if (Math.abs(gap) < 10) head = `${side} · in linea con la zona`;
+  else head = `${side} gli annunci simili`;
 
   const unit = poolUnit(card);
   const where = poolWhere(card);
@@ -352,7 +462,7 @@ export function positionInfo(
     pct: capped ? `${pct}+` : pct,
     head,
     sub,
-    note: verify ? "diferencia muy grande con similares: conviene verificar el aviso" : null,
+    note: verify ? "differenza molto grande rispetto agli annunci simili: conviene verificare l'annuncio" : null,
     green: card.deal_rating === "green",
     percentile: p != null && Number.isFinite(p) ? Math.max(0, Math.min(100, p)) : null,
   };
@@ -376,8 +486,8 @@ function poolByBedrooms(card: Pick<Card, "operation" | "property_type" | "compar
 
 /** "en Rawson" · "en Capital, 2 dorm." (los dormitorios solo cuando el conjunto los exige). */
 function poolWhere(card: Pick<Card, "zone" | "bedrooms" | "operation" | "property_type" | "comparables_by_area_only">): string {
-  const dorm = poolByBedrooms(card) && card.bedrooms ? `, ${card.bedrooms} dorm.` : "";
-  return `en ${zoneName(card.zone)}${dorm}`;
+  const dorm = poolByBedrooms(card) && card.bedrooms ? `, ${card.bedrooms} ${card.bedrooms === 1 ? "camera" : "camere"}` : "";
+  return `a ${zoneName(card.zone)}${dorm}`;
 }
 
 /**
@@ -390,7 +500,7 @@ function poolUnit(
 ): string {
   const unit = positionUnit(card);
   if (card.comparables_by_area_only !== true) return unit;
-  return `${unit === POSITION_UNIT.other ? "avisos" : unit} de superficie similar`;
+  return `${unit === POSITION_UNIT.other ? "annunci" : unit} di superficie simile`;
 }
 
 /** Motivos de P2/P3 que explican por qué un aviso no tiene comparación de precio. */
@@ -427,7 +537,7 @@ export function positionPhrase(card: Parameters<typeof positionInfo>[0]): string
 }
 
 /**
- * Ficha de un comparable del detalle: "Casa · 3 dorm. · 80 m² cub. · US$ 375/m²".
+ * Ficha de un comparable del detalle: "Casa · 3 dorm. · 80 m² cub. · € 375/m²".
  * `price_per_sqm` ya viene de P2 sobre la base con que se compara (cubierta en
  * vivienda — la total en un departamento sin cubierta —, total en lotes). La
  * zona solo si no es la del aviso: el conjunto puede ampliarse a zonas vecinas
@@ -441,14 +551,14 @@ export function miniCardMeta(mc: MiniCard, propertyZone: string | null, { withSq
   if (zone && zone !== propertyZone) parts.push(zoneName(zone));
   if (mc.property_type === "land") {
     if (hasArea(mc.area_sqm)) {
-      parts.push(mc.area_sqm >= 10000 ? `${nf1.format(mc.area_sqm / 10000)} ha` : `${nf.format(mc.area_sqm)} m² de lote`);
+      parts.push(mc.area_sqm >= 10000 ? `${nf1.format(mc.area_sqm / 10000)} ha` : `${nf.format(mc.area_sqm)} m² di terreno`);
     }
   } else {
-    if (mc.bedrooms != null) parts.push(`${mc.bedrooms} dorm.`);
+    if (mc.bedrooms != null) parts.push(`${mc.bedrooms} ${mc.bedrooms === 1 ? "camera" : "camere"}`);
     if (hasArea(mc.covered_area_sqm)) {
-      parts.push(`${nf.format(mc.covered_area_sqm)} m² cub.`);
+      parts.push(`${nf.format(mc.covered_area_sqm)} m² coperti`);
       // En casas, el lote cuando es más grande que la cubierta (misma lectura que la ficha de la card).
-      if (mc.property_type === "house" && hasArea(mc.area_sqm) && mc.area_sqm > mc.covered_area_sqm) parts.push(`${nf.format(mc.area_sqm)} m² lote`);
+      if (mc.property_type === "house" && hasArea(mc.area_sqm) && mc.area_sqm > mc.covered_area_sqm) parts.push(`${nf.format(mc.area_sqm)} m² di terreno`);
     } else if (hasArea(mc.area_sqm)) parts.push(`${nf.format(mc.area_sqm)} m²`);
   }
   if (withSqm) {
@@ -459,7 +569,7 @@ export function miniCardMeta(mc: MiniCard, propertyZone: string | null, { withSq
 }
 
 /**
- * "US$ 375/m²" del similar (base de P2: cubierta en vivienda, total en lotes);
+ * "€ 375/m²" del similar (base de P2: cubierta en vivienda, total en lotes);
  * null sin dato. En vivienda, un similar sin cubierta y con total se midió
  * sobre la total (contrato 04/10 §4.7): se rotula igual que en la card, para
  * no mezclar en la lista dos m² distintos sin decirlo.
@@ -468,8 +578,9 @@ export function miniCardSqm(
   mc: Pick<MiniCard, "price_per_sqm"> & Partial<Pick<MiniCard, "property_type" | "covered_area_sqm" | "area_sqm">>,
 ): string | null {
   if (mc.price_per_sqm == null || !Number.isFinite(mc.price_per_sqm)) return null;
-  const totalBasis = mc.property_type !== "land" && !hasArea(mc.covered_area_sqm) && hasArea(mc.area_sqm);
-  return `US$ ${(mc.price_per_sqm >= 10 ? nf : nf1).format(mc.price_per_sqm)}/m²${totalBasis ? TOTAL_BASIS_SUFFIX : ""}`;
+  // Italia: gli annunci pubblicano una sola superficie (la commerciale), quindi
+  // il "totali" di San Juan non distingue niente e non si scrive.
+  return `€ ${(mc.price_per_sqm >= 10 ? nf : nf1).format(mc.price_per_sqm)}/m²`;
 }
 
 export interface ComparablesPoolInfo {
@@ -514,16 +625,16 @@ export function comparablesPoolInfo(
   // "80 alquileres similares" · "30 casas similares" · "4 lotes rurales similares con servicios" (como lo dice P2).
   const unit = byArea
     ? poolUnit(card)
-    : positionUnit(card).replace(/^(lotes rurales)( con servicios)?$/, "$1 similares$2").replace(/^(?!.*similares).*$/, (u) => `${u} similares`);
+    : positionUnit(card).replace(/^(lotes rurales)( con servicios)?$/, "$1 simili$2").replace(/^(?!.*similares).*$/, (u) => `${u} simili`);
   const zone = zoneName(card.zone);
-  const dorm = byArea ? ", con cualquier cantidad de dormitorios" : poolByBedrooms(card) && card.bedrooms ? `, ${card.bedrooms} dorm.` : "";
+  const dorm = byArea ? ", con qualsiasi numero di camere" : poolByBedrooms(card) && card.bedrooms ? `, ${card.bedrooms} ${card.bedrooms === 1 ? "camera" : "camere"}` : "";
   const where =
-    pool.scope === "adjacent_zones" ? `en ${zone} y zonas vecinas` : pool.scope === "macro_zone" ? `en ${zone} y alrededores` : `en ${zone}`;
-  const summary = card.valuation_gap_pct != null ? `Comparado con ${nf.format(pool.count)} ${unit} ${where}${dorm}` : null;
+    pool.scope === "adjacent_zones" ? `a ${zone} e nelle zone vicine` : pool.scope === "macro_zone" ? `a ${zone} e dintorni` : `a ${zone}`;
+  const summary = card.valuation_gap_pct != null ? `Confrontato con ${nf.format(pool.count)} ${unit} ${where}${dorm}` : null;
   const notListed = pool.not_listed > 0 ? pool.not_listed : 0;
   const hidden =
     notListed > 0
-      ? `${nf.format(pool.listed)} a la vista · ${notListed === 1 ? "el otro no se muestra porque no publica" : `los otros ${nf.format(notListed)} no se muestran porque no publican`} foto o superficie`
+      ? `${nf.format(pool.listed)} in vista · ${notListed === 1 ? "l'altro non si mostra perché non indica" : `gli altri ${nf.format(notListed)} non si mostrano perché non indicano`} foto o superficie`
       : null;
   return { summary, hidden };
 }
@@ -596,12 +707,24 @@ export function priceStrip(
  * p < 50 → más barato que el (100 − p) %; 50 → en el medio; p > 50 → más
  * caro que el p %. Es presentación del mismo número, no otro indicador.
  */
+/** "del 20" / "dell'80" / "dell'11": la preposición según cómo suena el número. */
+function delPct(n: number): string {
+  return n === 8 || n === 11 || (n >= 80 && n <= 89) ? `dell'${n}` : `del ${n}`;
+}
+
+/** "in provincia di Roma" a partir de la sigla que manda P2 ("rm"). */
+export function provinceWhere(sigla: string | null | undefined): string {
+  const key = (sigla ?? "").trim().toLowerCase();
+  const name = (PROVINCE as Record<string, string>)[key];
+  return name ? `in provincia di ${name}` : key ? `in provincia (${key.toUpperCase()})` : "in provincia";
+}
+
 export function percentilePhrase(percentile: number | null | undefined): string | null {
   if (percentile == null || !Number.isFinite(percentile)) return null;
   const p = Math.max(0, Math.min(100, Math.round(percentile)));
-  if (p < 50) return `Más barato que el ${100 - p}${NBSP}% de los similares`;
-  if (p === 50) return "En el medio de los similares";
-  return `Más caro que el ${p}${NBSP}% de los similares`;
+  if (p < 50) return `Più economico ${delPct(100 - p)}${NBSP}% dei simili`;
+  if (p === 50) return "A metà tra i simili";
+  return `Più caro ${delPct(p)}${NBSP}% dei simili`;
 }
 
 /**
@@ -614,15 +737,15 @@ export function priceTrendInfo(
   const dir = card.price_trend;
   if (dir !== "up" && dir !== "down") return null;
   const pct = card.price_change_pct != null ? ` ${fmtPctRound(card.price_change_pct)}` : "";
-  if (dir === "up") return { dir, label: `En alta${pct}` };
+  if (dir === "up") return { dir, label: `In aumento${pct}` };
   const before = card.previous_price != null ? ` · antes ${fmtMoney(card.previous_price, card.currency)}` : "";
-  return { dir, label: `En baja${pct}${before}` };
+  return { dir, label: `In calo${pct}${before}` };
 }
 
 export interface ZoneRefInfo {
   /** "Zona · Capital" */
   title: string;
-  /** "m² US$ 857"; null sin `price_ref` mostrable (jamás la mediana de `zone_ref`). */
+  /** "m² € 857"; null sin `price_ref` mostrable (jamás la mediana de `zone_ref`). */
   value: string | null;
   /** De dónde sale el valor: "a menos de 1 km" · "en la zona" · "en el Gran San Juan" · "en la provincia". */
   where: string | null;
@@ -637,10 +760,10 @@ export interface ZoneRefInfo {
 
 /** El nivel de fallback dicho con todas las letras (antes "(zona ampliada)"). */
 const PLACE_WHERE: Record<string, string> = {
-  gran_san_juan: "en el Gran San Juan",
-  periferia: "en la periferia",
-  alejado: "en los departamentos alejados",
-  san_juan: "en la provincia",
+  gran_san_juan: "nell'area",
+  periferia: "in periferia",
+  alejado: "nelle zone lontane",
+  san_juan: "in provincia",
 };
 
 /**
@@ -658,20 +781,21 @@ export function priceRefInfo(
 ): { value: string; where: string | null; basis: string | null } | null {
   const ref = card.price_ref ?? null;
   if (!ref || ref.value == null || ref.unit !== "sqm") return null;
-  // El decimal solo aporta en valores chicos (m² de lote por debajo de US$ 10).
-  const value = `m² US$ ${(ref.value >= 10 ? nf : nf1).format(ref.value)}`;
+  // El decimal solo aporta en valores chicos (m² de lote por debajo de € 10).
+  const value = `m² € ${(ref.value >= 10 ? nf : nf1).format(ref.value)}`;
   let where: string | null = null;
   if (ref.level === "radius") {
-    where = ref.radius_km != null ? `a menos de ${nf.format(ref.radius_km)} km` : "alrededor del aviso";
+    where = ref.radius_km != null ? `a meno di ${nf.format(ref.radius_km)} km` : "intorno all'annuncio";
   } else if (ref.level === "zona") {
-    where = "en la zona";
+    where = "nella zona";
   } else if (ref.level === "macro_zona" || ref.level === "provincia") {
     const place = clean(ref.place);
-    where = (place && PLACE_WHERE[place]) || (place ? `en ${zoneName(place)}` : "en la zona ampliada");
+    // Italia: el nivel "provincia" trae la sigla ("rm") → "in provincia di Roma".
+    where = ref.level === "provincia" ? provinceWhere(place) : (place && PLACE_WHERE[place]) || (place ? `a ${zoneName(place)}` : "nella zona allargata");
   }
   const parts: string[] = [];
-  if (ref.sample != null) parts.push(`${nf.format(ref.sample)} avisos`);
-  if (ref.bucket === "todos") parts.push("sin distinguir dormitorios");
+  if (ref.sample != null) parts.push(`${nf.format(ref.sample)} annunci`);
+  if (ref.bucket === "todos") parts.push("senza distinguere per camere");
   return { value, where, basis: parts.length ? parts.join(" · ") : null };
 }
 
@@ -693,15 +817,15 @@ export function zoneRefInfo(
   const ref = priceRefInfo(card);
   const yieldLine =
     vertical === "invertir" && z?.cap_pct != null
-      ? `Rentabilidad promedio de la zona: ${fmtPctAbs(z.cap_pct)} anual`
+      ? `Rendimento medio della zona: ${fmtPctAbs(z.cap_pct)} annuo`
       : null;
   if (!ref && !yieldLine) return null;
 
   let trend: ZoneRefInfo["trend"] = null;
-  if (z?.trend === "flat") trend = { dir: "flat", label: "Estable" };
+  if (z?.trend === "flat") trend = { dir: "flat", label: "Stabile" };
   else if (z?.trend === "up" || z?.trend === "down") {
     const pct = z.trend_pct != null ? ` ${fmtPctAbs(z.trend_pct)}` : "";
-    trend = { dir: z.trend, label: `${z.trend === "up" ? "En suba" : "En baja"}${pct}` };
+    trend = { dir: z.trend, label: `${z.trend === "up" ? "In aumento" : "In calo"}${pct}` };
   }
 
   return {
@@ -721,9 +845,9 @@ type RentEstimateCard = Pick<Card, "rent_estimate_sample" | "rent_estimate_scope
 export const RENT_ESTIMATE_MIN = 5;
 
 const RENT_SCOPE_WHERE: Record<string, string> = {
-  zone: "de la zona",
-  adjacent_zones: "de zonas vecinas",
-  macro_zone: "de la zona ampliada",
+  zone: "della zona",
+  adjacent_zones: "delle zone vicine",
+  macro_zone: "della zona allargata",
 };
 
 /**
@@ -733,13 +857,13 @@ const RENT_SCOPE_WHERE: Record<string, string> = {
 function rentEstimateSample(card: RentEstimateCard): string | null {
   const n = card.rent_estimate_sample;
   if (n == null || !Number.isFinite(n)) return null;
-  const where = RENT_SCOPE_WHERE[card.rent_estimate_scope ?? ""] ?? "de la zona";
-  return `con ${nf.format(n)} ${n === 1 ? "alquiler similar" : "alquileres similares"} ${where}${
-    n <= RENT_ESTIMATE_MIN ? ", el mínimo con el que se estima" : ""
+  const where = RENT_SCOPE_WHERE[card.rent_estimate_scope ?? ""] ?? "della zona";
+  return `con ${nf.format(n)} ${n === 1 ? "affitto simile" : "affitti simili"} ${where}${
+    n <= RENT_ESTIMATE_MIN ? ", il minimo con cui si stima" : ""
   }`;
 }
 
-const RENT_UNADJUSTED = "es la renta de una vivienda en condiciones y esta hay que refaccionarla";
+const RENT_UNADJUSTED = "è l'affitto di un'abitazione in buono stato e questa è da ristrutturare";
 
 /**
  * Salvedad de la renta estimada en el detalle, el texto que sugiere P2 (el
@@ -752,7 +876,7 @@ export function rentEstimateNote(card: RentEstimateCard): string | null {
   const sample = rentEstimateSample(card);
   const unadjusted = card.rent_estimate_condition_unadjusted === true;
   if (!sample && !unadjusted) return null;
-  const parts = [sample ? `La renta está estimada ${sample}` : "La renta está estimada", "no es un alquiler pactado"];
+  const parts = [sample ? `L'affitto è stimato ${sample}` : "L'affitto è stimato", "non è un canone concordato"];
   if (unadjusted) parts.push(RENT_UNADJUSTED);
   return `${parts.join("; ")}.`;
 }
@@ -764,15 +888,15 @@ export function rentEstimateNote(card: RentEstimateCard): string | null {
  */
 export function estimateBlockNote(card: RentEstimateCard): string {
   const n = card.rent_estimate_sample;
-  const where = (RENT_SCOPE_WHERE[card.rent_estimate_scope ?? ""] ?? "de la zona").replace(/^de /, "en ");
+  const where = (RENT_SCOPE_WHERE[card.rent_estimate_scope ?? ""] ?? "della zona").replace(/^de /, "en ");
   const base =
     n != null && Number.isFinite(n)
-      ? `Según ${nf.format(n)} ${n === 1 ? "alquiler similar publicado" : "alquileres similares publicados"} ${where}${
-          n <= RENT_ESTIMATE_MIN ? " (el mínimo con el que se estima)" : ""
-        }. Rentabilidad = un año de ese alquiler ÷ precio de este aviso.`
+      ? `Secondo ${nf.format(n)} ${n === 1 ? "affitto simile pubblicato" : "affitti simili pubblicati"} ${where}${
+          n <= RENT_ESTIMATE_MIN ? " (il minimo con cui si stima)" : ""
+        }. Rendimento = un anno di quell'affitto ÷ prezzo di questo annuncio.`
       : ESTIMATE_BLOCK_NOTE;
   return card.rent_estimate_condition_unadjusted === true
-    ? `${base} Es la renta de una vivienda en condiciones: esta hay que refaccionarla.`
+    ? `${base} È l'affitto di un'abitazione in buono stato: questa è da ristrutturare.`
     : base;
 }
 
@@ -782,7 +906,7 @@ export function estimateInfo(
 ): { yieldLine: string | null; rentLine: string | null; note: string } | null {
   const yieldLine = card.gross_yield_pct != null ? `Rentabilidad anual estimada ${fmtPctAbs(card.gross_yield_pct)}` : null;
   const rentLine =
-    card.estimated_monthly_rent != null ? `Podría alquilarse a ≈ US$ ${nf.format(card.estimated_monthly_rent)}/mes` : null;
+    card.estimated_monthly_rent != null ? `Si potrebbe affittare a ≈ € ${nf.format(card.estimated_monthly_rent)} al mese` : null;
   return yieldLine || rentLine ? { yieldLine, rentLine, note: estimateBlockNote(card) } : null;
 }
 
@@ -797,14 +921,14 @@ export function cardDates(
   const published = card.days_on_market;
   const negotiate = published != null && published > NEGOTIATION_DAYS[card.operation];
   if (card.days_since_update != null) {
-    const updated = `Actualizado ${fmtAgo(card.days_since_update)}`;
+    const updated = `Aggiornato ${fmtAgo(card.days_since_update)}`;
     return {
-      text: negotiate ? `${updated} · publicado ${fmtAgo(published!)} · margen para negociar` : updated,
+      text: negotiate ? `${updated} · in catalogo da ${fmtDaysShort(published!)} · margine per trattare` : updated,
       negotiate,
     };
   }
   if (published == null) return null;
-  return { text: `Publicado ${fmtAgo(published)}${negotiate ? " · margen para negociar" : ""}`, negotiate };
+  return { text: `In catalogo da ${fmtDaysShort(published)}${negotiate ? " · margine per trattare" : ""}`, negotiate };
 }
 
 export interface CardChip {
@@ -825,9 +949,9 @@ export function cardChips(card: Card, vertical: CardVertical): CardChip[] {
     if (services) hard.push(services);
     if (card.in_subdivision === true) {
       const name = clean(card.subdivision_name);
-      hard.push(name ? `En loteo ${name}` : "Dentro de loteo");
+      hard.push(name ? `Nella lottizzazione ${name}` : "In lottizzazione");
     }
-    if (card.buildable === true) hard.push("Apto construcción");
+    if (card.buildable === true) hard.push("Edificabile");
     if (card.land_zoning && LAND_ZONING_LABEL[card.land_zoning]) hard.push(LAND_ZONING_LABEL[card.land_zoning]);
   } else {
     if (card.property_type === "room" && card.room_class) hard.push(ROOM_CLASS_LABEL[card.room_class]);

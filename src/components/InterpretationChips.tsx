@@ -17,6 +17,7 @@ import {
   type ChipModel,
 } from "@/lib/interpretation";
 import { EVENTS, trackEvent } from "@/lib/track";
+import { ORDER_LABEL } from "@/lib/labels";
 
 /**
  * "Entendí: …" — chips de interpretación (T2, 14/09). Un chip por filtro DURO
@@ -92,10 +93,13 @@ export default function InterpretationChips({
   };
 
   const currentOrder = summary.order_code ?? null;
+  // El orden por defecto se llama "Più rilevanti" en este sitio (18/11: sin
+  // "punteggio di opportunità"); los demás llevan la etiqueta de P2.
+  const orderLabel = currentOrder === "opportunity_score" || !currentOrder ? ORDER_LABEL.opportunity_score : summary.order;
 
   return (
     <div className="interp" ref={wrapRef} data-testid="interpretation">
-      <span className="interp-label">Entendí:</span>
+      <span className="interp-label">Ho capito:</span>
       <div className="interp-chips" role="list" aria-label="Filtros aplicados">
         {chips.map((chip) => {
           const open = editing === chip.key;
@@ -125,7 +129,7 @@ export default function InterpretationChips({
                   className="ichip-x"
                   onClick={() => remove(chip)}
                   disabled={disabled}
-                  aria-label={`Quitar ${chip.label}`}
+                  aria-label={`Togli ${chip.label}`}
                   title={chip.removePhrase}
                 >
                   ×
@@ -167,9 +171,9 @@ export default function InterpretationChips({
               onClick={() => setEditing(editing === "order" ? null : "order")}
               disabled={disabled}
               aria-expanded={editing === "order"}
-              aria-label={`Orden: ${summary.order} — cambiar`}
+              aria-label={`Ordine: ${orderLabel} — cambia`}
             >
-              Orden: {summary.order}
+              Ordine: {orderLabel}
               <span className="ichip-caret" aria-hidden>
                 ▾
               </span>
@@ -202,7 +206,7 @@ function Editor({ chip, onApply }: { chip: ChipModel; onApply: (phrase: string, 
       return <BudgetEditor chip={chip} onApply={onApply} />;
     case "bedrooms":
       return (
-        <div className="ichip-pop" role="group" aria-label="Dormitorios mínimos">
+        <div className="ichip-pop" role="group" aria-label="Camere minime">
           {[1, 2, 3, 4, 5].map((n) => (
             <button
               type="button"
@@ -217,7 +221,7 @@ function Editor({ chip, onApply }: { chip: ChipModel; onApply: (phrase: string, 
       );
     case "type":
       return (
-        <div className="ichip-pop" role="group" aria-label="Tipo de propiedad">
+        <div className="ichip-pop" role="group" aria-label="Tipologia">
           {TYPE_OPTIONS.map((t) => (
             <button
               type="button"
@@ -232,7 +236,7 @@ function Editor({ chip, onApply }: { chip: ChipModel; onApply: (phrase: string, 
       );
     case "land_class":
       return (
-        <div className="ichip-pop" role="group" aria-label="Clase de lote">
+        <div className="ichip-pop" role="group" aria-label="Tipo di terreno">
           {LAND_CLASS_OPTIONS.map((t) => (
             <button
               type="button"
@@ -250,6 +254,14 @@ function Editor({ chip, onApply }: { chip: ChipModel; onApply: (phrase: string, 
   }
 }
 
+/** Comuni del catálogo agrupados por regione, para el selector de zona. */
+const ZONE_GROUPS: [string, typeof ZONE_OPTIONS][] = Object.entries(
+  ZONE_OPTIONS.reduce<Record<string, typeof ZONE_OPTIONS>>((acc, z) => {
+    (acc[z.macro] ??= []).push(z);
+    return acc;
+  }, {}),
+).sort(([a], [b]) => a.localeCompare(b, "it"));
+
 function ZoneEditor({ chip, onApply }: { chip: ChipModel; onApply: (phrase: string, to: unknown) => void }) {
   const current = Array.isArray(chip.value) ? String(chip.value[0] ?? "") : "";
   return (
@@ -263,25 +275,20 @@ function ZoneEditor({ chip, onApply }: { chip: ChipModel; onApply: (phrase: stri
             const code = e.target.value;
             if (code && code !== current) onApply(zonePhrase(code), [code]);
           }}
-          aria-label="Elegir zona"
+          aria-label="Scegli la zona"
         >
           <option value="" disabled>
-            Elegí un departamento
+            Scegli un comune
           </option>
-          <optgroup label="Gran San Juan">
-            {ZONE_OPTIONS.filter((z) => z.macro === "gran_san_juan").map((z) => (
-              <option key={z.code} value={z.code}>
-                {z.name}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label="Resto de la provincia">
-            {ZONE_OPTIONS.filter((z) => z.macro !== "gran_san_juan").map((z) => (
-              <option key={z.code} value={z.code}>
-                {z.name}
-              </option>
-            ))}
-          </optgroup>
+          {ZONE_GROUPS.map(([regione, zone]) => (
+            <optgroup key={regione} label={regione}>
+              {zone.map((z) => (
+                <option key={z.code} value={z.code}>
+                  {z.name}
+                </option>
+              ))}
+            </optgroup>
+          ))}
         </select>
       </label>
     </div>
@@ -291,7 +298,8 @@ function ZoneEditor({ chip, onApply }: { chip: ChipModel; onApply: (phrase: stri
 function BudgetEditor({ chip, onApply }: { chip: ChipModel; onApply: (phrase: string, to: unknown) => void }) {
   const init = budgetFromChip(chip);
   const [amount, setAmount] = useState(init.amount ? String(init.amount) : "");
-  const [currency, setCurrency] = useState<"USD" | "ARS">(init.currency);
+  // Italia: una sola moneda (el selector de moneda de san_juan no existe acá).
+  const currency = init.currency;
   const n = Number(amount.replace(/\D/g, ""));
   const apply = () => {
     if (!n) return;
@@ -306,22 +314,18 @@ function BudgetEditor({ chip, onApply }: { chip: ChipModel; onApply: (phrase: st
       }}
     >
       <label className="ichip-field">
-        <span>{init.kind === "min" ? "Desde" : "Hasta"}</span>
+        <span>{init.kind === "min" ? "Da" : "Fino a"}</span>
         <input
           autoFocus
           inputMode="numeric"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
-          placeholder={currency === "USD" ? "90000" : "500000"}
-          aria-label="Monto"
+          placeholder="300000"
+          aria-label="Importo in euro"
         />
       </label>
-      <select value={currency} onChange={(e) => setCurrency(e.target.value as "USD" | "ARS")} aria-label="Moneda">
-        <option value="USD">US$</option>
-        <option value="ARS">$ pesos</option>
-      </select>
       <button type="submit" className="btn btn-magenta btn-sm" disabled={!n}>
-        Aplicar
+        Applica
       </button>
     </form>
   );
@@ -338,7 +342,7 @@ function OrderEditor({
 }) {
   const [place, setPlace] = useState("");
   return (
-    <div className="ichip-pop ichip-pop--order" role="group" aria-label="Cambiar el orden">
+    <div className="ichip-pop ichip-pop--order" role="group" aria-label="Cambia l'ordine">
       {ORDER_OPTIONS.filter((o) => !(o.saleOnly && isRent)).map((o) =>
         o.phrase ? (
           <button
@@ -362,11 +366,11 @@ function OrderEditor({
             <input
               value={place}
               onChange={(e) => setPlace(e.target.value)}
-              placeholder="Cerca de… (ej. la universidad, Plaza 25)"
-              aria-label="Cerca de qué lugar"
+              placeholder="Vicino a… (es. il Duomo, la stazione)"
+              aria-label="Vicino a quale luogo"
             />
             <button type="submit" className="btn btn-ghost btn-sm" disabled={!place.trim()}>
-              Ordenar por cercanía
+              Ordina per vicinanza
             </button>
           </form>
         ),

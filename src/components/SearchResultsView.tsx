@@ -78,6 +78,7 @@ import {
 } from "@/lib/vertical";
 import InterpretationChips, { type RefineMeta } from "./InterpretationChips";
 import InvestPanel, { useInvestAnalysis } from "./InvestPanel";
+import { searchHref } from "@/lib/market";
 import PropertyCard from "./PropertyCard";
 import ResultsMap from "./ResultsMap";
 import SearchSkeleton from "./SearchSkeleton";
@@ -86,21 +87,28 @@ import VerticalSelector from "./VerticalSelector";
 const PAGE_SIZE = 10;
 /** Sin `cards` después de esto: mensaje de espera + botón de fallback (T1). */
 const SLOW_MS = 4000;
-const DEFAULT_CHIPS = ["Comprar", "Alquilar", "Invertir", "Lotes"];
+const DEFAULT_CHIPS = ["Comprare", "Affittare"];
+/** El sitio de Italia no tiene vertical de inversión: el chip que P2 ofrece no se muestra. */
+const soloCompraAffitto = (chips: string[]) => chips.filter((c) => c.trim().toLowerCase() !== "investire");
+/** Chip de P2 Italia → vertical del selector. */
+const CHIP_VERTICAL: Record<string, VerticalId> = { comprare: "comprar", affittare: "alquilar" };
 /** Valores que acepta `vertical_override` (spec §3; "lotes" desde el 13/09). */
 const OVERRIDE_BY_CHIP: Record<string, string> = {
   comprar: "comprar",
   alquilar: "alquilar",
+  // P2 Italia manda los chips en italiano y acepta esos mismos valores.
+  comprare: "comprare",
+  affittare: "affittare",
   // Invertir = la vertical `investment` de P2 (02/11); "invertir" cae en compra.
   invertir: VERTICAL_OVERRIDE.invertir,
   lotes: "lotes",
 };
 /** Salida del bucle cuando ya eligió operación y P2 sigue sin señal. */
 const REPEAT_EXAMPLES = [
-  "casa en Rawson",
-  "departamento en Capital hasta 60 mil dólares",
-  "casa de 3 dormitorios con patio",
-  "lotes en Santa Lucía",
+  "villa a Pomezia",
+  "appartamento a Milano fino a 400 mila euro",
+  "appartamento con 2 camere e giardino",
+  "terreno a Roma",
 ];
 
 /**
@@ -381,7 +389,7 @@ export default function SearchResultsView() {
         let sessionId = sessionRef.current ?? (await openSession());
         if (!sessionId) {
           trackEvent(EVENTS.SEARCH_ERROR, { ...searchMeta, stage: "session" });
-          setError({ text: "No pude iniciar la búsqueda. Probá de nuevo en unos segundos.", canRetry: true });
+          setError({ text: "Non sono riuscito ad avviare la ricerca. Riprova tra qualche secondo.", canRetry: true });
           return;
         }
         let searchId = beginTurn(sessionId);
@@ -433,8 +441,8 @@ export default function SearchResultsView() {
           setError({
             text:
               res.status === 404
-                ? "La sesión de búsqueda venció y no pude abrir otra. Volvé a buscar."
-                : (body?.error ?? "No pude completar la búsqueda. Probá de nuevo en un momento."),
+                ? "La sessione di ricerca è scaduta e non sono riuscito ad aprirne un'altra. Ripeti la ricerca."
+                : (body?.error ?? "Non sono riuscito a completare la ricerca. Riprova tra un momento."),
             canRetry: res.status !== 422,
           });
           return;
@@ -572,7 +580,7 @@ export default function SearchResultsView() {
               setPending(null);
               setClarification({
                 message: ev.message,
-                chips: ev.chips.length ? ev.chips : ev.nivel1_required ? DEFAULT_CHIPS : [],
+                chips: soloCompraAffitto(ev.chips.length ? ev.chips : ev.nivel1_required ? DEFAULT_CHIPS : []),
                 repeat,
                 soft,
               });
@@ -596,7 +604,7 @@ export default function SearchResultsView() {
         // navegar a otra página a mitad del stream tampoco.
         if (isCurrent() && !ac.signal.aborted && !unloadingRef.current) {
           trackEvent(EVENTS.SEARCH_ERROR, { ...searchMeta, stage: "network" });
-          setError({ text: "Se cortó la conexión con el buscador. Probá de nuevo.", canRetry: true });
+          setError({ text: "Si è interrotta la connessione con il motore di ricerca. Riprova.", canRetry: true });
         }
       } finally {
         // Volcado final: el último frame puede quedar pendiente al cerrar el stream.
@@ -675,7 +683,7 @@ export default function SearchResultsView() {
       if (!isCurrent()) return;
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        setError({ text: body?.error ?? "No pude completar la búsqueda. Probá de nuevo en un momento.", canRetry: true });
+        setError({ text: body?.error ?? "Non sono riuscito a completare la ricerca. Riprova tra un momento.", canRetry: true });
         return;
       }
       const data = (await res.json()) as SyncSearchResponse;
@@ -724,7 +732,7 @@ export default function SearchResultsView() {
     } catch {
       if (isCurrent() && !ac.signal.aborted) {
         trackEvent(EVENTS.SEARCH_ERROR, { query: last.query, stage: "fallback" });
-        setError({ text: "Tampoco pude buscar por el canal directo. Probá de nuevo en un momento.", canRetry: true });
+        setError({ text: "Non sono riuscito a cercare nemmeno con la ricerca diretta. Riprova tra un momento.", canRetry: true });
       }
     } finally {
       if (isCurrent()) {
@@ -766,7 +774,7 @@ export default function SearchResultsView() {
       } else {
         const params = new URLSearchParams({ q });
         if (vert) params.set("v", vert);
-        router.push(`/buscar?${params.toString()}`);
+        router.push(searchHref(params));
       }
     },
     [router, runSearch, urlQuery, urlVertical, investStart],
@@ -821,7 +829,7 @@ export default function SearchResultsView() {
         // el efecto: la clave ya se marca como procesada.
         processedQuery.current = runKey(urlQuery, v);
         const params = new URLSearchParams({ q: urlQuery, v });
-        router.replace(`/buscar?${params.toString()}`, { scroll: false });
+        router.replace(searchHref(params), { scroll: false });
         return;
       }
 
@@ -993,10 +1001,11 @@ export default function SearchResultsView() {
       trackEvent(EVENTS.CLARIFICATION_CHOICE, { chip, reason: "terminal", mode: "search" });
       // Elegir "Comprar"/"Alquilar"/"Invertir"/"Lotes" acá también es elegir
       // vertical: el selector y la preferencia acompañan (el summary lo confirma después).
-      if (isVerticalId(lower)) {
-        verticalRef.current = lower;
-        setVertical(lower);
-        storeVertical(lower);
+      const chosen = isVerticalId(lower) ? lower : (CHIP_VERTICAL[lower] ?? null);
+      if (chosen) {
+        verticalRef.current = chosen;
+        setVertical(chosen);
+        storeVertical(chosen);
       }
       const override = OVERRIDE_BY_CHIP[lower];
       if (override) {
@@ -1060,7 +1069,7 @@ export default function SearchResultsView() {
   const mapSplit = mapAvailable && showMap && !isMobile;
   const mapOverlay = mapAvailable && mapMobileOpen;
   const zero = !!results && results.totalMatches === 0;
-  const isRent = results?.summary?.vertical?.toLowerCase().includes("alquiler") ?? vertical === "alquilar";
+  const isRent = results?.summary?.vertical?.toLowerCase().includes("affitto") ?? vertical === "alquilar";
   /** Skeleton: buscando y todavía sin nada en pantalla. */
   const showSkeleton = searching && !results && !error && !clarification;
   /** Refinando con resultados en pantalla: se atenúan hasta que llegan los nuevos. */
@@ -1092,11 +1101,11 @@ export default function SearchResultsView() {
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Buscá: casa con patio en Rawson hasta 80 mil dólares"
-            aria-label="Buscar propiedades"
+            placeholder="Cerca: appartamento con giardino a Roma fino a 300 mila euro"
+            aria-label="Cerca immobili"
           />
           <button type="submit" className="btn btn-magenta" disabled={searching || !input.trim()}>
-            {searching ? "…" : "Buscar"}
+            {searching ? "…" : "Cerca"}
           </button>
         </form>
 
@@ -1117,7 +1126,7 @@ export default function SearchResultsView() {
               onClick={toggleDesktopMap}
               aria-pressed={mapSplit}
             >
-              {mapSplit ? "Ocultar mapa" : "Ver mapa"}
+              {mapSplit ? "Nascondi mappa" : "Mostra mappa"}
             </button>
           )}
         </div>
@@ -1130,13 +1139,12 @@ export default function SearchResultsView() {
             (la consulta) y el fallback sync de P2. */}
         {pending?.slow && !results && (
           <div className="slow-wait" role="status" data-testid="slow-wait">
-            <h3>Está tardando más de lo normal</h3>
+            <h3>Ci sta mettendo più del solito</h3>
             <p>
-              Sigo buscando: «{pending.query}». Si preferís, hago la búsqueda directa con los filtros (sin el
-              resumen en prosa).
+              Sto ancora cercando: «{pending.query}». Se preferisci, faccio la ricerca diretta con i filtri (senza il commento).
             </p>
             <button type="button" className="btn btn-magenta" onClick={() => void runFallback()}>
-              Buscar con filtros
+              Cerca con i filtri
             </button>
           </div>
         )}
@@ -1145,7 +1153,7 @@ export default function SearchResultsView() {
             va escribiendo debajo de las cards conforme llegan los chunks. */}
         {narrative?.text && (
           <div className="summary" role="status" aria-live="polite" data-testid="narrative">
-            <span className="summary-label">Resumen</span>
+            <span className="summary-label">In breve</span>
             <p>
               {narrative.text}
               {narrative.streaming && <span className="caret" aria-hidden />}
@@ -1178,13 +1186,13 @@ export default function SearchResultsView() {
         {clarification && clarification.soft && (
           <div className="relax-bubble relax-bubble--soft" role="status">
             <p>{clarification.message}</p>
-            <p className="section-note">Los resultados de abajo siguen siendo los de tu búsqueda anterior.</p>
+            <p className="section-note">I risultati qui sotto sono ancora quelli della ricerca precedente.</p>
           </div>
         )}
 
         {clarification && !clarification.repeat && !clarification.soft && (
           <div className="zero-state" role="status" data-testid="clarification">
-            <h3>Una precisión antes de buscar</h3>
+            <h3>Una precisazione prima di cercare</h3>
             <p>{clarification.message}</p>
             {clarification.chips.length > 0 ? (
               <div className="msg-chips">
@@ -1205,7 +1213,7 @@ export default function SearchResultsView() {
               // callejón sin salida: se ofrecen búsquedas de ejemplo, como en el
               // caso `repeat`.
               <>
-                <p className="section-note">Probá, por ejemplo:</p>
+                <p className="section-note">Prova, per esempio:</p>
                 <div className="msg-chips">
                   {REPEAT_EXAMPLES.map((ex) => (
                     <button
@@ -1225,10 +1233,9 @@ export default function SearchResultsView() {
 
         {clarification?.repeat && (
           <div className="zero-state" role="status">
-            <h3>Necesito un dato más para buscar</h3>
+            <h3>Mi serve un dato in più per cercare</h3>
             <p>
-              Con eso todavía no puedo armar una búsqueda. Sumá al menos un tipo de propiedad,
-              una zona o un presupuesto — por ejemplo:
+              Con questo non riesco ancora a fare una ricerca. Aggiungi almeno una tipologia, una zona o un budget — per esempio:
             </p>
             <div className="msg-chips">
               {REPEAT_EXAMPLES.map((ex) => (
@@ -1242,7 +1249,7 @@ export default function SearchResultsView() {
 
         {error && (
           <div className="zero-state" role="alert" data-testid="search-error">
-            <h3>No pude completar la búsqueda</h3>
+            <h3>Non sono riuscito a completare la ricerca</h3>
             <p>{error.text}</p>
             {error.canRetry && (
               <button
@@ -1252,7 +1259,7 @@ export default function SearchResultsView() {
                   if (last) void runSearch(last.query, last.opts);
                 }}
               >
-                Reintentar
+                Riprova
               </button>
             )}
           </div>
@@ -1262,8 +1269,8 @@ export default function SearchResultsView() {
             acciones (`suggestions`) para relajar el criterio (regla 6). */}
         {zero && (results!.suggestions?.length ?? 0) > 0 && (
           <div className="zero-state" role="status">
-            <h3>Sin resultados para esta búsqueda</h3>
-            <p>En San Juan el cero casi siempre es el mercado, no un error. Probá con:</p>
+            <h3>Nessun risultato per questa ricerca</h3>
+            <p>Al momento non c&apos;è nulla che rispetti tutti i criteri. Prova con:</p>
             <div className="msg-chips">
               {results!.suggestions!.map((s) => (
                 <button
@@ -1303,7 +1310,7 @@ export default function SearchResultsView() {
           results.cards.length >= results.totalMatches &&
           results.visibleCards >= results.cards.length && (
             <div className="sysmsg">
-              Eso es todo lo publicado para esta búsqueda ({fmtInt(results.totalMatches)} avisos).
+              Questi sono tutti gli annunci per questa ricerca ({fmtInt(results.totalMatches)} annunci).
             </div>
           )}
 
@@ -1315,12 +1322,12 @@ export default function SearchResultsView() {
           results.visibleCards >= results.cards.length && (
             <>
               <h2 className="section-title">
-                {zero ? "Podrían interesarte" : "Similares que no cumplen todos los filtros"}
+                {zero ? "Potrebbero interessarti" : "Simili che non rispettano tutti i filtri"}
               </h2>
               <p className="section-note">
                 {zero
-                  ? "No cumplen tu búsqueda, pero son lo más parecido que hay publicado."
-                  : "Se parecen a lo que pedís, aunque no cumplen todos los filtros."}
+                  ? "Non rispettano la tua ricerca, ma sono gli annunci più vicini a quello che cerchi."
+                  : "Somigliano a quello che chiedi, anche se non rispettano tutti i filtri."}
               </p>
               <div className="cards-grid">
                 {results.related.cards.map((card, i) => (
@@ -1333,7 +1340,7 @@ export default function SearchResultsView() {
         {(refreshing || loadingMore) && (
           <div className="loading-row" role="status">
             <span className="spinner" aria-hidden />
-            {refreshing ? "Actualizando resultados…" : "Cargando más resultados…"}
+            {refreshing ? "Aggiorno i risultati…" : "Carico altri risultati…"}
           </div>
         )}
 
@@ -1344,11 +1351,11 @@ export default function SearchResultsView() {
         <aside className="map-col">
           <div className="map-note" role="note">
             {mapPins
-              ? `${fmtInt(pins.length)} de ${fmtInt(mapTotalMatches ?? results.totalMatches)} con ubicación publicada${vertical === "lotes" ? " · lotes" : ""}`
-              : "Cargando ubicaciones…"}
+              ? `${fmtInt(pins.length)} di ${fmtInt(mapTotalMatches ?? results.totalMatches)} con posizione sulla mappa${vertical === "lotes" ? " · terreni" : ""}`
+              : "Carico le posizioni…"}
           </div>
           <button type="button" className="map-close" onClick={toggleMapOverlay}>
-            ✕ Cerrar mapa
+            ✕ Chiudi mappa
           </button>
           <ResultsMap
             pins={pins}
@@ -1362,7 +1369,7 @@ export default function SearchResultsView() {
 
       {mapAvailable && (
         <button type="button" className="map-fab" onClick={toggleMapOverlay}>
-          {mapOverlay ? "☰ Ver lista" : "🗺 Ver mapa"}
+          {mapOverlay ? "☰ Vedi elenco" : "🗺 Vedi mappa"}
         </button>
       )}
     </div>
@@ -1395,10 +1402,10 @@ function ResultsHead({
           <p className="results-query results-query--searching" data-testid="searching-line" aria-live="polite">
             {searching || pending ? (
               <>
-                <span className="spinner spinner--inline" aria-hidden /> Buscando… «{query}»
+                <span className="spinner spinner--inline" aria-hidden /> Sto cercando… «{query}»
               </>
             ) : (
-              <>Buscando: «{query}»</>
+              <>Sto cercando: «{query}»</>
             )}
           </p>
         ) : null}
@@ -1414,9 +1421,9 @@ function ResultsHead({
     <div className="results-head">
       {/* Contador = total_matches (total real en DB), nunca `total`. */}
       <h1 className="results-count" data-testid="results-count">
-        {fmtInt(results.totalMatches)} {results.totalMatches === 1 ? "resultado" : "resultados"}
+        {fmtInt(results.totalMatches)} {results.totalMatches === 1 ? "risultato" : "risultati"}
       </h1>
-      {query && <p className="results-query">para: «{query}»</p>}
+      {query && <p className="results-query">per: «{query}»</p>}
       {s && <InterpretationChips summary={s} disabled={searching} onRefine={onRefine} onFlipAssumption={onFlipAssumption} isRent={isRent} />}
     </div>
   );

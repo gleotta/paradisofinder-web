@@ -21,58 +21,58 @@ import type {
 
 export const PROPERTY_TYPE_LABEL: Record<PropertyType, string> = {
   house: "Casa",
-  apartment: "Departamento",
+  apartment: "Appartamento",
   // Contrato 13/09 §4.4: la etiqueta de `land` es "Lote".
-  land: "Lote",
-  office: "Oficina",
-  retail: "Local comercial",
+  land: "Terreno",
+  office: "Ufficio",
+  retail: "Locale commerciale",
   villa: "Villa",
-  garage: "Cochera",
-  warehouse: "Galpón",
-  room: "Habitación",
-  studio: "Monoambiente",
-  attic: "Ático",
-  penthouse: "Penthouse",
-  other: "Propiedad",
+  garage: "Box",
+  warehouse: "Capannone",
+  room: "Stanza",
+  studio: "Monolocale",
+  attic: "Attico",
+  penthouse: "Attico",
+  other: "Immobile",
 };
 
 export const OPERATION_LABEL: Record<Operation, string> = {
-  sale: "Venta",
-  rent: "Alquiler",
+  sale: "Vendita",
+  rent: "Affitto",
 };
 
 /** `unknown` no se muestra. */
 export const CONDITION_LABEL: Record<Exclude<Condition, "unknown">, string> = {
-  new: "A estrenar",
-  excellent: "Excelente estado",
-  good: "Buen estado",
-  needs_renovation: "A refaccionar",
-  under_construction: "En construcción",
+  new: "Nuova costruzione",
+  excellent: "Ottimo stato",
+  good: "Buono stato",
+  needs_renovation: "Da ristrutturare",
+  under_construction: "In costruzione",
 };
 
 export const PUBLISHER_LABEL: Record<Publisher, string> = {
-  agency: "Inmobiliaria",
-  owner: "Dueño directo",
+  agency: "Agenzia",
+  owner: "Privato",
 };
 
 /** Sufijo del precio en alquileres; null = no informado → se asume mensual. */
 export const RENTAL_PERIOD_SUFFIX: Record<RentalPeriod, string> = {
-  day: "/día",
-  week: "/semana",
-  month: "/mes",
+  day: "/giorno",
+  week: "/settimana",
+  month: "/mese",
 };
 
 export const ROOM_CLASS_LABEL: Record<RoomClass, string> = {
-  single: "Individual",
-  single_double_bed: "Individual con cama matrimonial",
-  double: "Doble",
-  triple_plus: "Triple o más",
+  single: "Singola",
+  single_double_bed: "Singola con letto matrimoniale",
+  double: "Doppia",
+  triple_plus: "Tripla o più",
 };
 
 export const RATING_LABEL = {
-  deal_rating: "Precio",
-  resale_investment_rating: "Inversión: reventa",
-  rental_investment_rating: "Inversión: renta",
+  deal_rating: "Prezzo",
+  resale_investment_rating: "Investimento: rivendita",
+  rental_investment_rating: "Investimento: rendita",
 } as const;
 
 /**
@@ -80,51 +80,51 @@ export const RATING_LABEL = {
  * 13/09 §4.1, sugeridas por P2): el chip dice esto en vez de "Precio".
  */
 export const DEAL_RATING_LABEL: Record<Exclude<DealRating, RatingColor>, string> = {
-  verify_data: "Verificar datos",
-  outdated: "Sin actualizar",
+  verify_data: "Dati da verificare",
+  outdated: "Non aggiornato",
 };
 
 /** Etiquetas de antigüedad (§4.2): visibles en la card, nunca como "malo". */
 export const AGE_FLAG_LABEL: Record<AgeFlag, string> = {
-  old: "Aviso antiguo",
-  very_old: "Más de un año publicado",
+  old: "Annuncio datato",
+  very_old: "In catalogo da più di un anno",
 };
 
 export const LISTING_STATUS_LABEL: Partial<Record<ListingStatus, string>> = {
-  stale: "Sin actualizar",
+  stale: "Non aggiornato",
 };
 
 /** Vocabulario público del request (spec §5 — "Request"). */
 export const REQUEST_VERTICAL_LABEL: Record<string, string> = {
-  sale: "Venta",
-  rent: "Alquiler",
-  investment: "Inversión",
-  temporary_rent: "Alquiler temporario",
-  land: "Lotes en venta",
+  sale: "Vendita",
+  rent: "Affitto",
+  investment: "Investimento",
+  temporary_rent: "Affitto breve",
+  land: "Terreni in vendita",
 };
 
 export const ORDER_LABEL: Record<string, string> = {
-  opportunity_score: "Opportunity Score",
-  price_asc: "Precio, de menor a mayor",
-  price_desc: "Precio, de mayor a menor",
-  price_per_sqm_asc: "Precio por m²",
-  valuation_gap_desc: "Mayor descuento vs. zona",
-  price_percentile_asc: "Bajo precio de zona",
-  gross_yield_desc: "Mayor renta estimada",
-  days_on_market_desc: "Más días publicadas",
-  distance_asc: "Cercanía",
+  opportunity_score: "Più rilevanti",
+  price_asc: "Prezzo crescente",
+  price_desc: "Prezzo decrescente",
+  price_per_sqm_asc: "Prezzo al m²",
+  valuation_gap_desc: "Più sotto il prezzo di zona",
+  price_percentile_asc: "Prezzo basso per la zona",
+  gross_yield_desc: "Rendita stimata più alta",
+  days_on_market_desc: "Da più tempo in catalogo",
+  distance_asc: "Vicinanza",
 };
 
 /** Chips de atributos (solo si vienen informados en true). */
 export const ATTRIBUTE_LABEL = {
-  pool: "Pileta",
-  bbq_area: "Quincho",
-  patio: "Patio",
-  furnished: "Amoblado",
-  parking: "Cochera",
-  gated_community: "Barrio cerrado",
-  mortgage_eligible: "Apto crédito",
-  elevator: "Ascensor",
+  pool: "Piscina",
+  bbq_area: "Barbecue",
+  patio: "Giardino",
+  furnished: "Arredato",
+  parking: "Box o posto auto",
+  gated_community: "Comprensorio privato",
+  mortgage_eligible: "Mutuabile",
+  elevator: "Ascensore",
 } as const;
 
 export type AttributeKey = keyof typeof ATTRIBUTE_LABEL;
@@ -190,39 +190,39 @@ export const SIMILARS_VISIBLE = 5;
 
 /** Etiqueta de la fila propia entre los similares ("Esta casa"). */
 export const SELF_LABEL: Partial<Record<PropertyType, string>> = {
-  house: "Esta casa",
-  apartment: "Este departamento",
-  land: "Este lote",
-  villa: "Esta villa",
-  room: "Esta habitación",
-  studio: "Este monoambiente",
-  office: "Esta oficina",
-  retail: "Este local",
-  garage: "Esta cochera",
-  warehouse: "Este galpón",
-  penthouse: "Este penthouse",
-  attic: "Este ático",
+  house: "Questa casa",
+  apartment: "Questo appartamento",
+  land: "Questo terreno",
+  villa: "Questa villa",
+  room: "Questa stanza",
+  studio: "Questo monolocale",
+  office: "Questo ufficio",
+  retail: "Questo locale",
+  garage: "Questo box",
+  warehouse: "Questo capannone",
+  penthouse: "Questo attico",
+  attic: "Questo attico",
 };
-export const SELF_LABEL_DEFAULT = "Esta propiedad";
+export const SELF_LABEL_DEFAULT = "Questo immobile";
 
 export const POSITION_UNIT = {
-  rent: "alquileres",
-  house: "casas",
-  apartment: "departamentos",
-  land: "lotes",
-  land_urban: "lotes urbanos",
-  land_rural: "lotes rurales",
-  land_rural_services: "lotes rurales con servicios",
-  other: "avisos similares",
+  rent: "affitti",
+  house: "case",
+  apartment: "appartamenti",
+  land: "terreni",
+  land_urban: "terreni edificabili",
+  land_rural: "terreni agricoli",
+  land_rural_services: "terreni agricoli con servizi",
+  other: "annunci simili",
 } as const;
 
 /** Aviso de estimación (C10): va en TODA card y al pie de "Lectura de FINDER". Texto exacto. */
 export const ESTIMATE_NOTICE =
-  "Valores estimados a partir de avisos publicados, no de operaciones concretadas. Son orientativos.";
+  "Valori stimati a partire dagli annunci pubblicati, non da compravendite concluse. Sono indicativi.";
 
 /** Aclaración fija del bloque "Esta propiedad · estimación" (Invertir). */
 export const ESTIMATE_BLOCK_NOTE =
-  "Según alquileres similares publicados en la zona. Rentabilidad = un año de ese alquiler ÷ precio de este aviso.";
+  "Secondo affitti simili pubblicati nella zona. Rendimento = un anno di quell'affitto ÷ prezzo di questo annuncio.";
 
 /**
  * "Publicado hace X · margen para negociar" (C13): solo cuando
@@ -236,22 +236,22 @@ export const NEGOTIATION_DAYS: Record<Operation, number> = {
 /* ---------------- Lotes (contrato 13/09 §4.4) ---------------- */
 
 export const LAND_CLASS_LABEL: Record<LandClass, string> = {
-  urban: "Lote urbano",
-  rural: "Lote rural",
+  urban: "Terreno edificabile",
+  rural: "Terreno agricolo",
 };
 
 export const LAND_SERVICE_LABEL: Record<LandService, string> = {
-  agua: "agua",
-  luz: "luz",
-  cloacas: "cloacas",
+  agua: "acqua",
+  luz: "luce",
+  cloacas: "fognatura",
   gas: "gas",
-  pavimento: "pavimento",
+  pavimento: "strada asfaltata",
 };
 
 export const LAND_ZONING_LABEL: Record<LandZoning, string> = {
-  residential: "Zonificación residencial",
-  commercial: "Zonificación comercial",
-  industrial: "Zonificación industrial",
-  rural: "Zonificación rural",
-  mixed: "Zonificación mixta",
+  residential: "Zona residenziale",
+  commercial: "Zona commerciale",
+  industrial: "Zona industriale",
+  rural: "Zona agricola",
+  mixed: "Zona mista",
 };
