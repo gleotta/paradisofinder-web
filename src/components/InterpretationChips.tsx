@@ -45,16 +45,23 @@ export default function InterpretationChips({
   onRefine,
   onFlipAssumption,
   isRent,
+  hideFields,
 }: {
   summary: Summary;
   disabled: boolean;
+  /**
+   * Chips que no se muestran (por `field`). Búsqueda por área (18/11): con el
+   * listado siguiendo al mapa, el lugar de la consulta ya no filtra.
+   */
+  hideFields?: readonly string[];
   /** Frase de refinamiento → `runSearch(phrase, {keepSession})`. */
   onRefine: (phrase: string, meta: RefineMeta) => void;
   /** Invertir la asunción de operación (override en sesión). */
   onFlipAssumption: (to: "alquilar" | "comprar") => void;
   isRent: boolean;
 }) {
-  const chips = chipsFromSummary(summary);
+  const allChips = chipsFromSummary(summary);
+  const chips = hideFields?.length ? allChips.filter((c) => !hideFields.includes(c.field)) : allChips;
   const note = assumptionModel(summary.assumption_note);
   // El editor abierto queda atado al summary que lo abrió: un summary nuevo
   // (búsqueda relanzada) lo cierra solo, sin efecto ni setState en cascada.

@@ -15,7 +15,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type * as LType from "leaflet";
-import type { MapPin } from "@/lib/p2/types";
+import type { Bbox, MapPin } from "@/lib/p2/types";
 import { PROPERTY_TYPE_LABEL, RENTAL_PERIOD_SUFFIX } from "@/lib/labels";
 import { compactPrice, fmtMoney } from "@/lib/format";
 import { detailHref, EVENTS, trackCardClick, trackEvent } from "@/lib/track";
@@ -38,6 +38,29 @@ interface Props {
    * también se distinguen por `property_type`.
    */
   layer?: "homes" | "land";
+  /**
+   * Búsqueda por área (18/11): el rectángulo visible cada vez que el VISITANTE
+   * mueve el mapa o hace zoom. Los encuadres que hace la propia página (pins
+   * nuevos, abrir un popup) no lo disparan.
+   */
+  onViewportChange?: (bbox: Bbox) => void;
+  /**
+   * `false` = no re-encuadrar cuando cambian los pins: en modo área el
+   * visitante ya eligió qué mirar. Por defecto se encuadra (búsqueda nueva).
+   */
+  fitOnPins?: boolean;
+}
+
+/** Rectángulo visible, recortado al mundo: [sur, oeste, norte, este]. */
+function viewportBbox(map: LType.Map): Bbox | null {
+  const b = map.getBounds();
+  const south = Math.max(-90, b.getSouth());
+  const north = Math.min(90, b.getNorth());
+  const west = Math.max(-180, b.getWest());
+  const east = Math.min(180, b.getEast());
+  if (!(south < north && west < east)) return null;
+  const r = (n: number) => Math.round(n * 1e5) / 1e5; // ~1 m: de sobra para un rectángulo
+  return [r(south), r(west), r(north), r(east)];
 }
 
 /** Precio del pin: SIEMPRE el original, con sufijo de periodicidad en alquileres. */
@@ -83,7 +106,15 @@ function popupHtml(pin: MapPin, searchId: string | null): string {
   return `<a class="map-pop map-pop--compact" href="${href}" target="_blank" rel="noopener" data-id="${pin.id}"><span class="map-pop-price">${pinPrice(pin)}</span><span class="map-pop-title">${title}</span><span class="map-pop-cta">Vedi scheda ↗</span></a>`;
 }
 
-export default function ResultsMap({ pins, selectedId, onSelect, searchId, layer = "homes" }: Props) {
+export default function ResultsMap({
+  pins,
+  selectedId,
+  onSelect,
+  searchId,
+  layer = "homes",
+  onViewportChange,
+  fitOnPins = true,
+}: Props) {
   const divRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LType.Map | null>(null);
   const LRef = useRef<typeof LType | null>(null);
@@ -91,10 +122,20 @@ export default function ResultsMap({ pins, selectedId, onSelect, searchId, layer
   const markersRef = useRef<Map<string, LType.Marker>>(new Map());
   const pinsRef = useRef<Map<string, MapPin>>(new Map());
   const roRef = useRef<ResizeObserver | null>(null);
+  const gestureCleanupRef = useRef<(() => void) | null>(null);
   const onSelectRef = useRef(onSelect);
   const searchIdRef = useRef(searchId);
   const boundsRef = useRef<LType.LatLngBounds | null>(null);
   const hadSizeRef = useRef(false);
+  const onViewportRef = useRef(onViewportChange);
+  const fitOnPinsRef = useRef(fitOnPins);
+  /**
+   * true entre un gesto del visitante sobre el mapa (rueda, arrastre, toque,
+   * teclado, botones de zoom) y el `moveend` que provoca. Es lo que separa sus
+   * movimientos de los de la página: sin esto, cada resultado nuevo
+   * re-encuadraría el mapa y dispararía otra búsqueda, en círculo.
+   */
+  const userMoveRef = useRef(false);
   // Cambia en cada init exitoso para que los efectos de markers re-corran
   // también tras el remount de StrictMode.
   const [mapEpoch, setMapEpoch] = useState(0);
@@ -106,6 +147,14 @@ export default function ResultsMap({ pins, selectedId, onSelect, searchId, layer
   useEffect(() => {
     searchIdRef.current = searchId;
   }, [searchId]);
+
+  useEffect(() => {
+    onViewportRef.current = onViewportChange;
+  }, [onViewportChange]);
+
+  useEffect(() => {
+    fitOnPinsRef.current = fitOnPins;
+  }, [fitOnPins]);
 
   useEffect(() => {
     let cancelled = false;
@@ -122,6 +171,13 @@ export default function ResultsMap({ pins, selectedId, onSelect, searchId, layer
         center: SJ_CENTER,
         zoom: EMPTY_ZOOM,
         scrollWheelZoom: true,
+        // Límites del mercado (búsqueda por área): no se llega al mapamundi ni
+        // se sale del marco, así el rectángulo visible siempre es un lugar real.
+        // Viscosidad 1: el mapa frena en el borde en vez de rebotar (un rebote
+        // sería un movimiento que no hizo el visitante).
+        ...(MARKET_CONFIG.map.minZoom != null ? { minZoom: MARKET_CONFIG.map.minZoom } : {}),
+        ...(MARKET_CONFIG.map.maxBounds ? { maxBounds: MARKET_CONFIG.map.maxBounds, maxBoundsViscosity: 1 } : {}),
+        worldCopyJump: true,
       });
       L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 19,
@@ -148,6 +204,32 @@ export default function ResultsMap({ pins, selectedId, onSelect, searchId, layer
       }).addTo(map);
       mapRef.current = map;
 
+      // Búsqueda por área: gestos del visitante → `moveend` → rectángulo visible.
+      // En captura: los botones de zoom frenan la propagación de sus eventos.
+      const host = divRef.current;
+      const markUser = () => {
+        userMoveRef.current = true;
+      };
+      for (const type of ["wheel", "mousedown", "touchstart", "keydown"] as const) {
+        host.addEventListener(type, markUser, { capture: true, passive: true });
+      }
+      gestureCleanupRef.current = () => {
+        for (const type of ["wheel", "mousedown", "touchstart", "keydown"] as const) {
+          host.removeEventListener(type, markUser, { capture: true });
+        }
+      };
+      // Un click sin arrastre no mueve nada: no deja el gesto "armado" para el
+      // próximo encuadre de la página.
+      map.on("click", () => {
+        userMoveRef.current = false;
+      });
+      map.on("moveend", () => {
+        if (!userMoveRef.current) return;
+        userMoveRef.current = false;
+        const bbox = viewportBbox(map);
+        if (bbox) onViewportRef.current?.(bbox);
+      });
+
       // El popup es HTML crudo: el click en "Ver detalle" se registra al abrirse
       // (una vez por elemento) como card_clicked desde el mapa.
       map.on("popupopen", (e) => {
@@ -168,7 +250,8 @@ export default function ResultsMap({ pins, selectedId, onSelect, searchId, layer
         if (!el || !m) return;
         const hasSize = el.clientWidth > 0 && el.clientHeight > 0;
         m.invalidateSize();
-        if (hasSize && !hadSizeRef.current && boundsRef.current) {
+        if (hasSize && !hadSizeRef.current && boundsRef.current && fitOnPinsRef.current) {
+          userMoveRef.current = false;
           m.fitBounds(boundsRef.current, { padding: [48, 48], maxZoom: 15 });
         }
         hadSizeRef.current = hasSize;
@@ -182,6 +265,8 @@ export default function ResultsMap({ pins, selectedId, onSelect, searchId, layer
       cancelled = true;
       roRef.current?.disconnect();
       roRef.current = null;
+      gestureCleanupRef.current?.();
+      gestureCleanupRef.current = null;
       hadSizeRef.current = false;
       markers.clear();
       pinIndex.clear();
@@ -213,6 +298,8 @@ export default function ResultsMap({ pins, selectedId, onSelect, searchId, layer
         riseOnHover: true,
       });
       marker.on("click", () => {
+        // Abrir el popup puede correr el mapa (autoPan): no es una búsqueda.
+        userMoveRef.current = false;
         onSelectRef.current(pin.id);
         trackEvent(EVENTS.MAP_MARKER_CLICK, { property_id: pin.id });
       });
@@ -226,14 +313,29 @@ export default function ResultsMap({ pins, selectedId, onSelect, searchId, layer
 
     if (points.length > 0) {
       boundsRef.current = trimmedBounds(L, pins);
-      if (boundsRef.current && divRef.current && divRef.current.clientWidth > 0) {
+      // En modo área los pins cambian (el universo sin el lugar) pero la vista
+      // es la que eligió el visitante: no se toca.
+      if (fitOnPinsRef.current && boundsRef.current && divRef.current && divRef.current.clientWidth > 0) {
+        userMoveRef.current = false;
         map.fitBounds(boundsRef.current, { padding: [48, 48], maxZoom: 15 });
       }
     } else {
       boundsRef.current = null;
-      map.setView(SJ_CENTER, EMPTY_ZOOM);
+      if (fitOnPinsRef.current) {
+        userMoveRef.current = false;
+        map.setView(SJ_CENTER, EMPTY_ZOOM);
+      }
     }
   }, [mapEpoch, pins]);
+
+  // Al salir del modo área (fitOnPins vuelve a true) se recupera el encuadre
+  // de la consulta, aunque los pins no hayan cambiado.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!fitOnPins || !map || !boundsRef.current || !divRef.current || divRef.current.clientWidth === 0) return;
+    userMoveRef.current = false;
+    map.fitBounds(boundsRef.current, { padding: [48, 48], maxZoom: 15 });
+  }, [fitOnPins]);
 
   // Resaltar el marker de la card seleccionada/hovereada.
   useEffect(() => {

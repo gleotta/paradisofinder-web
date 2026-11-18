@@ -29,6 +29,8 @@
 import baseSearch from "../../../mocks/search-text-response.json";
 import baseClarification from "../../../mocks/clarification-event.json";
 import type {
+  AreaSearchRequest,
+  AreaSearchResponse,
   Card,
   CardsEvent,
   ClarificationEvent,
@@ -1445,6 +1447,39 @@ export async function mockSearchMap(body: MapSearchRequest): Promise<MapSearchRe
     market: "san_juan",
     params_applied: { ...body },
     pins,
+  };
+}
+
+/**
+ * Mock de POST /search/area: el mismo universo de `mockSearchMap` SIN las
+ * zonas de la consulta, recortado al rectángulo y paginado.
+ */
+export async function mockSearchArea(body: AreaSearchRequest): Promise<AreaSearchResponse> {
+  await sleep(80);
+  const intent = SESSION_INTENT.get(body.session_id);
+  const vertical = (intent?.vertical ?? "sale") as Vertical;
+  const kind = kindFor(vertical);
+  const tipo = intent?.tipo ?? (vertical === "land" ? "land" : null);
+  const [south, west, north, east] = body.bbox;
+  const universe = totalFor(vertical, [], null, intent) * 3;
+
+  const inside: Card[] = [];
+  for (let i = 0; i < universe; i++) {
+    const card = mockCard(i, kind, { zones: [], tipo });
+    if (card.latitude == null || card.longitude == null) continue;
+    if (card.latitude < south || card.latitude > north || card.longitude < west || card.longitude > east) continue;
+    inside.push(card);
+  }
+  const offset = body.offset ?? 0;
+  const cards = inside.slice(offset, offset + (body.limit ?? 10));
+  return {
+    total: cards.length,
+    total_matches: inside.length,
+    market: "san_juan",
+    bbox: body.bbox,
+    params_applied: { vertical, property_type: tipo },
+    cards,
+    content_language: "es-AR",
   };
 }
 

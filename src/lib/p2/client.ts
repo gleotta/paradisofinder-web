@@ -10,6 +10,8 @@
 import "server-only";
 
 import type {
+  AreaSearchRequest,
+  AreaSearchResponse,
   InvestRequest,
   MapSearchRequest,
   MapSearchResponse,
@@ -25,6 +27,7 @@ import type {
 import {
   mockCreateSession,
   mockGetProperty,
+  mockSearchArea,
   mockSearchInvest,
   mockSearchMap,
   mockSearchStream,
@@ -143,6 +146,34 @@ export function searchStructured(params: StructuredParams): Promise<StructuredRe
  */
 export function searchMap(body: MapSearchRequest): Promise<MapSearchResponse> {
   return p2Json("/search/map", body, () => mockSearchMap(body));
+}
+
+/**
+ * Búsqueda por área (P2 2026-11-18): sesión + rectángulo del mapa → cards del
+ * criterio sin el lugar. `X-Visitor-Id` es la clave del cupo de P2 para esta
+ * ruta (cada movimiento del mapa es un pedido; sin él, un balde global).
+ */
+export async function searchArea(
+  body: AreaSearchRequest,
+  opts: { visitorId?: string | null; signal?: AbortSignal } = {},
+): Promise<AreaSearchResponse> {
+  if (mocksEnabled()) return mockSearchArea(body);
+  try {
+    const res = await p2Fetch("/search/area", {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: opts.visitorId ? { "X-Visitor-Id": opts.visitorId } : {},
+      signal: opts.signal,
+    });
+    if (!res.ok) throw await readError(res);
+    return (await res.json()) as AreaSearchResponse;
+  } catch (err) {
+    if (mode() === "auto" && isConnectionError(err)) {
+      warnFallback(err);
+      return mockSearchArea(body);
+    }
+    throw err;
+  }
 }
 
 /* ------------------------------------------------------------------ */

@@ -39,8 +39,18 @@ export interface MarketConfig {
   theme: ThemeId;
   /** Rutas públicas (las de italia se reescriben en `src/proxy.ts`). */
   routes: { search: string; property: string };
-  /** Centro y zoom del mapa sin resultados. */
-  map: { center: [number, number]; zoom: number };
+  /**
+   * Centro y zoom del mapa sin resultados. `minZoom` y `maxBounds` (sur-oeste,
+   * nor-este) acotan hasta dónde se puede alejar o correr el mapa: con la
+   * búsqueda por área (18/11), irse al mapamundi deja al visitante mirando
+   * copias del mundo sin avisos.
+   */
+  map: {
+    center: [number, number];
+    zoom: number;
+    minZoom?: number;
+    maxBounds?: [[number, number], [number, number]];
+  };
   modules: {
     /** Vertical Invertir + panel de análisis de inversión. */
     invest: boolean;
@@ -75,7 +85,8 @@ const CONFIGS: Record<MarketId, MarketConfig> = {
     siteName: "finder Italia",
     theme: process.env.NEXT_PUBLIC_THEME === "era" ? "era" : "blu",
     routes: { search: "/cerca", property: "/immobile" },
-    map: { center: [42.5, 12.5], zoom: 6 },
+    // Italia entera entra desde el zoom 5; el marco deja ver los países vecinos.
+    map: { center: [42.5, 12.5], zoom: 6, minZoom: 5, maxBounds: [[30, -6], [52, 32]] },
     modules: { invest: false, landVertical: false, seoLandings: false, publishCta: false, sourceLink: false },
   },
 };

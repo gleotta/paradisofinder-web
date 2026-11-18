@@ -631,6 +631,11 @@ export interface MapSearchRequest {
   /** Aceptados desde el contrato del 13/09. */
   place?: string;
   land_class?: string;
+  /**
+   * Búsqueda por área (18/11): los pins del criterio SIN el lugar (zonas,
+   * lugar y "cerca de" se ignoran) — el universo que se recorre moviendo el mapa.
+   */
+  ignore_place?: boolean;
 }
 
 /** Payload mínimo de un marker; el detalle se pide con GET /property/{id}. */
@@ -657,6 +662,36 @@ export interface MapSearchResponse {
   market: string;
   params_applied: Record<string, unknown>;
   pins: MapPin[];
+}
+
+/* ------------------------------------------------------------------ */
+/* Búsqueda por área — POST /search/area (P2, 2026-11-18)              */
+/* ------------------------------------------------------------------ */
+
+/** Rectángulo visible del mapa en grados: [sur, oeste, norte, este]. */
+export type Bbox = [number, number, number, number];
+
+/**
+ * El listado sigue al mapa: el criterio es el de la sesión SIN el lugar (lo
+ * resuelve P2) más el rectángulo. `extra="forbid"`: un campo de más da 422.
+ */
+export interface AreaSearchRequest {
+  session_id: string;
+  bbox: Bbox;
+  limit?: number;
+  offset?: number;
+}
+
+export interface AreaSearchResponse {
+  /** Cards de esta página. */
+  total: number;
+  /** Avisos del criterio (sin el lugar) dentro del rectángulo. */
+  total_matches: number;
+  market: string;
+  bbox: Bbox;
+  params_applied: Record<string, unknown>;
+  cards: Card[];
+  content_language: string;
 }
 
 /**

@@ -77,6 +77,12 @@ export const EVENTS = {
   MAP_TOGGLED: "map_toggled",
   MAP_MARKER_CLICK: "map_marker_click",
   MAP_FEED: "map_feed_loaded",
+  /** Búsqueda por área (18/11): el visitante movió el mapa y el listado lo siguió. */
+  MAP_AREA: "map_area_search",
+  /** Salió del modo área (volvió al listado de la consulta). */
+  MAP_AREA_EXIT: "map_area_exit",
+  /** Prendió o apagó "Aggiorna mentre sposto la mappa". */
+  MAP_AREA_AUTO: "map_area_auto_toggled",
   /** Página SEO zona × tipo × operación vista. */
   LANDING_VIEWED: "landing_viewed",
   /* ---- Análisis de inversión (02/11 — `docs/DECISION_2026-11-02_analisis-inversion.md`) ---- */

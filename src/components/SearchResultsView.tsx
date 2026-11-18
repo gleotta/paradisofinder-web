@@ -47,6 +47,8 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
+  AreaSearchResponse,
+  Bbox,
   Card,
   CardsEvent,
   ClarificationEvent,
@@ -62,6 +64,7 @@ import { readSSE } from "@/lib/sse";
 import {
   cardsDigest,
   EVENTS,
+  getVisitorId,
   scoreStats,
   searchIdFor,
   setTrackingSearch,
@@ -85,6 +88,12 @@ import SearchSkeleton from "./SearchSkeleton";
 import VerticalSelector from "./VerticalSelector";
 
 const PAGE_SIZE = 10;
+/** Búsqueda por área: espera desde el último movimiento del mapa hasta pedir. */
+const AREA_DEBOUNCE_MS = 450;
+/** Preferencia del visitante: "0" = no actualizar el listado al mover el mapa. */
+const AREA_AUTO_KEY = "pf_area_auto";
+/** Chips del lugar de la consulta: en modo área el rectángulo ocupa su sitio. */
+const AREA_HIDDEN_CHIPS = ["zones", "place", "near"] as const;
 /** Sin `cards` después de esto: mensaje de espera + botón de fallback (T1). */
 const SLOW_MS = 4000;
 const DEFAULT_CHIPS = ["Comprare", "Affittare"];
@@ -139,6 +148,22 @@ interface ResultsState {
   suggestions: string[] | null;
   /** Cómo llegaron: stream o fallback sync. */
   via: "stream" | "sync";
+}
+
+/**
+ * Modo área (German, 18/11): el listado sigue al mapa. Mientras existe, las
+ * cards en pantalla son las del rectángulo y no las de la consulta; el
+ * rectángulo REEMPLAZA el lugar de la consulta y el resto del criterio vale
+ * (lo resuelve P2 con la sesión). Los resultados de la consulta quedan
+ * intactos en `results`: salir del modo área los vuelve a mostrar.
+ */
+interface AreaState {
+  bbox: Bbox;
+  cards: Card[];
+  total: number;
+  /** Pidiendo la primera página de este rectángulo. */
+  loading: boolean;
+  error: string | null;
 }
 
 interface Clarification {
@@ -220,6 +245,20 @@ export default function SearchResultsView() {
   const [showMap, setShowMap] = useState(true);
   const [mapMobileOpen, setMapMobileOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** Modo área: `null` = el listado es el de la consulta. */
+  const [area, setArea] = useState<AreaState | null>(null);
+  /** Pins del criterio SIN el lugar: lo que se ve al alejarse de la zona buscada. */
+  const [areaPins, setAreaPins] = useState<{ pins: MapPin[]; totalMatches: number } | null>(null);
+  /** "Aggiorna mentre sposto la mappa" (por defecto sí; se recuerda por navegador). */
+  const [areaAuto, setAreaAuto] = useState(() => {
+    try {
+      return typeof window === "undefined" || window.localStorage.getItem(AREA_AUTO_KEY) !== "0";
+    } catch {
+      return true;
+    }
+  });
+  /** Con la actualización apagada: el visitante movió el mapa y todavía no buscó ahí. */
+  const [areaPending, setAreaPending] = useState<Bbox | null>(null);
   /** Sube en cada turno con resultados: invalida los pins del mapa. */
   const [turn, setTurn] = useState(0);
   /** Latencia hasta las primeras cards del último turno (ms) — visible para las pruebas. */
@@ -231,6 +270,14 @@ export default function SearchResultsView() {
   const turnRef = useRef(0);
   const seenIds = useRef<Set<string>>(new Set());
   const mapKey = useRef<string | null>(null);
+  const areaRef = useRef<AreaState | null>(null);
+  const areaAutoRef = useRef(areaAuto);
+  const areaTimer = useRef<number | null>(null);
+  const areaAbort = useRef<AbortController | null>(null);
+  /** Token del pedido de área vigente: una respuesta vieja no pisa a una nueva. */
+  const areaSeq = useRef(0);
+  const areaPinsKey = useRef<string | null>(null);
+  const areaMoreRef = useRef(false);
   const busyRef = useRef(false);
   /** Última corrida completa (query + opts) para el botón Reintentar. */
   const lastRun = useRef<{ query: string; opts?: RunOpts } | null>(null);
@@ -298,6 +345,23 @@ export default function SearchResultsView() {
     });
   }, []);
 
+  /** Sale del modo área y descarta lo que hubiera en vuelo (búsqueda nueva, refinamiento, ✕). */
+  const resetArea = useCallback(() => {
+    if (areaTimer.current !== null) {
+      window.clearTimeout(areaTimer.current);
+      areaTimer.current = null;
+    }
+    areaAbort.current?.abort();
+    areaAbort.current = null;
+    areaSeq.current++;
+    areaPinsKey.current = null;
+    areaMoreRef.current = false;
+    areaRef.current = null;
+    setArea(null);
+    setAreaPins(null);
+    setAreaPending(null);
+  }, []);
+
   const runSearch = useCallback(
     async (query: string, opts?: RunOpts) => {
       // Una búsqueda nueva aborta el stream anterior (puede seguir escribiendo
@@ -310,6 +374,9 @@ export default function SearchResultsView() {
       const mode = opts?.mode ?? "search";
 
       busyRef.current = true;
+      // Una búsqueda o un refinamiento vuelven al listado de la consulta: el
+      // criterio cambia y el mapa se re-encuadra con lo nuevo.
+      resetArea();
       setSearching(true);
       setError(null);
       setClarification(null);
@@ -624,7 +691,7 @@ export default function SearchResultsView() {
     },
     // `clarification` se lee solo para el guard final; no debe recrear el callback.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [applyRelax, investCancel],
+    [applyRelax, investCancel, resetArea],
   );
 
   /**
@@ -641,6 +708,7 @@ export default function SearchResultsView() {
     const myRun = ++runSeq.current;
     const isCurrent = () => runSeq.current === myRun;
     clearSlowTimer();
+    resetArea();
     setPending({ query: last.query, slow: false });
     setSearching(true);
     setError(null);
@@ -741,7 +809,7 @@ export default function SearchResultsView() {
         busyRef.current = false;
       }
     }
-  }, [applyRelax]);
+  }, [applyRelax, resetArea]);
 
   /** T7: `cards_rendered` con la latencia medida en el cliente, después de pintar. */
   useEffect(() => {
@@ -837,6 +905,151 @@ export default function SearchResultsView() {
     },
     [results, router, runSearch, submitQuery, urlQuery, investStart, investCancel],
   );
+
+  /* ------------- Búsqueda por área: el listado sigue al mapa (18/11) ------------- */
+
+  useEffect(() => {
+    areaRef.current = area;
+  }, [area]);
+
+  /** Primera página del rectángulo. Cancela el pedido anterior si quedó viejo. */
+  const searchArea = useCallback(async (bbox: Bbox, how: "auto" | "button") => {
+    const sessionId = sessionRef.current;
+    if (!sessionId) return;
+    areaAbort.current?.abort();
+    const ac = new AbortController();
+    areaAbort.current = ac;
+    const seq = ++areaSeq.current;
+    areaMoreRef.current = false;
+    setAreaPending(null);
+    setArea((prev) => ({ bbox, cards: prev?.cards ?? [], total: prev?.total ?? 0, loading: true, error: null }));
+
+    // Pins del criterio SIN el lugar: una vez por turno, al entrar al modo área
+    // (no en cada movimiento: los que quedan fuera de la vista no molestan).
+    const pinsKey = `${sessionId}#${turnRef.current}`;
+    if (areaPinsKey.current !== pinsKey) {
+      areaPinsKey.current = pinsKey;
+      void (async () => {
+        try {
+          const res = await fetch("/api/search/map", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ session_id: sessionId, ignore_place: true }),
+          });
+          if (!res.ok) throw new Error(String(res.status));
+          const data = (await res.json()) as MapSearchResponse;
+          if (areaPinsKey.current === pinsKey) setAreaPins({ pins: data.pins, totalMatches: data.total_matches });
+        } catch {
+          // quedan los pins de la consulta; se reintenta con el próximo movimiento
+          if (areaPinsKey.current === pinsKey) areaPinsKey.current = null;
+        }
+      })();
+    }
+
+    const failed = "Non sono riuscito ad aggiornare l'elenco per quest'area. Sposta di nuovo la mappa per riprovare.";
+    try {
+      const res = await fetch("/api/search/area", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId, bbox, offset: 0, limit: PAGE_SIZE, visitor_id: getVisitorId() }),
+        signal: ac.signal,
+      });
+      if (seq !== areaSeq.current) return;
+      if (!res.ok) {
+        const text =
+          res.status === 404
+            ? "La ricerca è scaduta: ripetila per continuare sulla mappa."
+            : res.status === 429
+              ? "Troppi spostamenti in poco tempo: aspetta qualche secondo e sposta di nuovo la mappa."
+              : failed;
+        setArea((prev) => (prev ? { ...prev, loading: false, error: text } : prev));
+        return;
+      }
+      const data = (await res.json()) as AreaSearchResponse;
+      if (seq !== areaSeq.current) return;
+      setArea({ bbox, cards: data.cards, total: data.total_matches, loading: false, error: null });
+      setSelectedId(null);
+      trackEvent(EVENTS.MAP_AREA, { how, total_matches: data.total_matches, cards: data.cards.length, bbox });
+    } catch {
+      if (ac.signal.aborted || seq !== areaSeq.current) return;
+      setArea((prev) => (prev ? { ...prev, loading: false, error: failed } : prev));
+    }
+  }, []);
+
+  /** El visitante movió el mapa (ResultsMap no avisa los encuadres de la página). */
+  const handleViewport = useCallback(
+    (bbox: Bbox) => {
+      if (!sessionRef.current || busyRef.current) return;
+      if (!areaAutoRef.current) {
+        setAreaPending(bbox);
+        return;
+      }
+      if (areaTimer.current !== null) window.clearTimeout(areaTimer.current);
+      areaTimer.current = window.setTimeout(() => {
+        areaTimer.current = null;
+        void searchArea(bbox, "auto");
+      }, AREA_DEBOUNCE_MS);
+    },
+    [searchArea],
+  );
+
+  const toggleAreaAuto = useCallback(() => {
+    const next = !areaAutoRef.current;
+    areaAutoRef.current = next;
+    setAreaAuto(next);
+    try {
+      window.localStorage.setItem(AREA_AUTO_KEY, next ? "1" : "0");
+    } catch {
+      /* sin almacenamiento: vale para esta visita */
+    }
+    trackEvent(EVENTS.MAP_AREA_AUTO, { on: next });
+    // Prenderla con un movimiento sin buscar: se busca ahí mismo.
+    if (next && areaPending) void searchArea(areaPending, "auto");
+  }, [areaPending, searchArea]);
+
+  const exitArea = useCallback(() => {
+    trackEvent(EVENTS.MAP_AREA_EXIT, { total_matches: areaRef.current?.total ?? null });
+    resetArea();
+  }, [resetArea]);
+
+  /** Páginas siguientes del MISMO rectángulo. */
+  const loadMoreArea = useCallback(async () => {
+    const a = areaRef.current;
+    const sessionId = sessionRef.current;
+    if (!a || !sessionId || a.loading || a.error || areaMoreRef.current || a.cards.length >= a.total) return;
+    areaMoreRef.current = true;
+    const seq = areaSeq.current;
+    setLoadingMore(true);
+    try {
+      const res = await fetch("/api/search/area", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: sessionId,
+          bbox: a.bbox,
+          offset: a.cards.length,
+          limit: PAGE_SIZE,
+          visitor_id: getVisitorId(),
+        }),
+      });
+      if (!res.ok || seq !== areaSeq.current) return;
+      const data = (await res.json()) as AreaSearchResponse;
+      if (seq !== areaSeq.current) return;
+      setArea((prev) => {
+        if (!prev) return prev;
+        const seen = new Set(prev.cards.map((c) => c.id));
+        const fresh = data.cards.filter((c) => !seen.has(c.id));
+        // Una página vacía cierra el listado (el catálogo cambió entre pedidos).
+        const total = fresh.length === 0 ? prev.cards.length : data.total_matches;
+        return { ...prev, cards: [...prev.cards, ...fresh], total };
+      });
+    } catch {
+      /* la próxima vez que el final del listado entre en pantalla se reintenta */
+    } finally {
+      if (seq === areaSeq.current) areaMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  }, []);
 
   /* ------- Scroll infinito (de a 10 hasta agotar el criterio, sin tope) ------- */
 
@@ -934,13 +1147,13 @@ export default function SearchResultsView() {
     if (!sentinel || !results) return;
     const io = new IntersectionObserver(
       (entries) => {
-        if (entries.some((e) => e.isIntersecting)) void loadMore();
+        if (entries.some((e) => e.isIntersecting)) void (areaRef.current ? loadMoreArea() : loadMore());
       },
       { rootMargin: "600px 0px" },
     );
     io.observe(sentinel);
     return () => io.disconnect();
-  }, [results, loadMore]);
+  }, [results, loadMore, area, loadMoreArea]);
 
   /* ---------------- Mapa (forma (b): P2 resuelve el criterio) ---------------- */
 
@@ -1063,6 +1276,10 @@ export default function SearchResultsView() {
   /* ---------------- Render ---------------- */
 
   const pins = useMemo(() => mapPins ?? [], [mapPins]);
+  // Modo área: los pins son los del criterio sin el lugar (cuando llegan) y el
+  // listado, el del rectángulo. Los de la consulta siguen en `results`.
+  const shownPins = area && areaPins ? areaPins.pins : pins;
+  const listCards = area ? area.cards : results ? results.cards.slice(0, results.visibleCards) : [];
   const mapAvailable = !!results && results.cards.length > 0;
   // En mobile el split no existe: el mapa se monta SOLO con el overlay
   // abierto, así Leaflet no compite con el pintado de las cards (T1).
@@ -1118,6 +1335,7 @@ export default function SearchResultsView() {
             isRent={isRent}
             onRefine={handleRefine}
             onFlipAssumption={handleFlipAssumption}
+            area={area}
           />
           {mapAvailable && (
             <button
@@ -1151,7 +1369,7 @@ export default function SearchResultsView() {
 
         {/* Resumen de P2 en prosa — texto de P3/LLM, se muestra tal cual; se
             va escribiendo debajo de las cards conforme llegan los chunks. */}
-        {narrative?.text && (
+        {narrative?.text && !area && (
           <div className="summary" role="status" aria-live="polite" data-testid="narrative">
             <span className="summary-label">In breve</span>
             <p>
@@ -1163,7 +1381,7 @@ export default function SearchResultsView() {
 
         {/* Aclaración NO terminal (`few_results`): burbuja con las relajaciones
             propuestas y sus conteos; las cards que cumplen quedan debajo. */}
-        {relax && (
+        {relax && !area && (
           <div className="relax-bubble" role="status" data-testid="relax-bubble">
             <p>{relax.message}</p>
             <div className="msg-chips">
@@ -1267,7 +1485,7 @@ export default function SearchResultsView() {
 
         {/* Cero resultados: la narrativa de P2 ya explica el caso; acá van sus
             acciones (`suggestions`) para relajar el criterio (regla 6). */}
-        {zero && (results!.suggestions?.length ?? 0) > 0 && (
+        {zero && !area && (results!.suggestions?.length ?? 0) > 0 && (
           <div className="zero-state" role="status">
             <h3>Nessun risultato per questa ricerca</h3>
             <p>Al momento non c&apos;è nulla che rispetti tutti i criteri. Prova con:</p>
@@ -1288,9 +1506,37 @@ export default function SearchResultsView() {
 
         {showSkeleton && <SearchSkeleton />}
 
-        {results && results.visibleCards > 0 && (
-          <div className={`cards-grid${refreshing ? " cards-grid--refreshing" : ""}`} data-testid="cards-grid">
-            {results.cards.slice(0, results.visibleCards).map((card, i) => (
+        {/* Modo área (18/11): el listado es el del rectángulo del mapa. */}
+        {area && (
+          <div className="area-bar" role="status" data-testid="area-bar" data-total={area.total} data-loading={area.loading ? "" : undefined}>
+            <p>
+              <strong>L&apos;elenco segue la mappa.</strong> Il luogo della ricerca non conta più; tipologia, prezzo e gli altri filtri sì.
+            </p>
+            <button type="button" className="chip chip--action" onClick={exitArea} data-testid="area-exit">
+              ✕ Torna alla ricerca
+            </button>
+          </div>
+        )}
+        {area?.error && (
+          <div className="sysmsg" role="alert" data-testid="area-error">
+            {area.error}
+          </div>
+        )}
+        {area && !area.loading && !area.error && area.total === 0 && (
+          <div className="zero-state" role="status" data-testid="area-empty">
+            <h3>Nessun annuncio in quest&apos;area</h3>
+            <p>Allontana lo zoom o sposta la mappa: gli altri filtri della ricerca restano attivi.</p>
+          </div>
+        )}
+        {area?.loading && area.cards.length === 0 && <SearchSkeleton />}
+
+        {results && listCards.length > 0 && (
+          <div
+            className={`cards-grid${refreshing || area?.loading ? " cards-grid--refreshing" : ""}`}
+            data-testid="cards-grid"
+            data-area={area ? "" : undefined}
+          >
+            {listCards.map((card, i) => (
               <div
                 key={card.id}
                 id={`pcard-${card.id}`}
@@ -1305,7 +1551,12 @@ export default function SearchResultsView() {
 
         {/* Cierre del listado duro: solo cuando hubo scroll real (más de una
             página) — va ANTES de las relacionadas, que no son parte del total. */}
+        {area && !area.loading && area.total > PAGE_SIZE && area.cards.length >= area.total && (
+          <div className="sysmsg">Questi sono tutti gli annunci in quest&apos;area ({fmtInt(area.total)} annunci).</div>
+        )}
+
         {results &&
+          !area &&
           results.totalMatches > PAGE_SIZE &&
           results.cards.length >= results.totalMatches &&
           results.visibleCards >= results.cards.length && (
@@ -1318,6 +1569,7 @@ export default function SearchResultsView() {
             la última página del criterio, ya deduplicado por P2. Se muestra
             recién cuando el buffer de resultados duros está todo en pantalla. */}
         {results?.related &&
+          !area &&
           results.related.cards.length > 0 &&
           results.visibleCards >= results.cards.length && (
             <>
@@ -1349,27 +1601,52 @@ export default function SearchResultsView() {
 
       {mapAvailable && (mapSplit || mapOverlay) && results && (
         <aside className="map-col">
-          <div className="map-note" role="note">
-            {mapPins
-              ? `${fmtInt(pins.length)} di ${fmtInt(mapTotalMatches ?? results.totalMatches)} con posizione sulla mappa${vertical === "lotes" ? " · terreni" : ""}`
-              : "Carico le posizioni…"}
+          <div className="map-note" role="note" data-testid="map-note">
+            {area
+              ? area.loading
+                ? "Aggiorno l'elenco…"
+                : `${fmtInt(area.total)} ${area.total === 1 ? "annuncio" : "annunci"} in quest'area`
+              : mapPins
+                ? `${fmtInt(pins.length)} di ${fmtInt(mapTotalMatches ?? results.totalMatches)} con posizione sulla mappa${vertical === "lotes" ? " · terreni" : ""}`
+                : "Carico le posizioni…"}
           </div>
           <button type="button" className="map-close" onClick={toggleMapOverlay}>
             ✕ Chiudi mappa
           </button>
+          {/* Con la actualización apagada, el visitante decide cuándo buscar. */}
+          {!areaAuto && areaPending && (
+            <button
+              type="button"
+              className="map-area-btn"
+              onClick={() => void searchArea(areaPending, "button")}
+              data-testid="area-search-here"
+            >
+              Cerca in quest&apos;area
+            </button>
+          )}
+          <label className="map-area-auto" data-testid="area-auto">
+            <input type="checkbox" checked={areaAuto} onChange={toggleAreaAuto} />
+            <span>Aggiorna mentre sposto la mappa</span>
+          </label>
           <ResultsMap
-            pins={pins}
+            pins={shownPins}
             selectedId={selectedId}
             onSelect={handleMapSelect}
             searchId={results.searchId}
             layer={vertical === "lotes" ? "land" : "homes"}
+            onViewportChange={handleViewport}
+            fitOnPins={!area}
           />
         </aside>
       )}
 
       {mapAvailable && (
         <button type="button" className="map-fab" onClick={toggleMapOverlay}>
-          {mapOverlay ? "☰ Vedi elenco" : "🗺 Vedi mappa"}
+          {mapOverlay
+            ? area && !area.loading
+              ? `☰ Vedi ${fmtInt(area.total)} ${area.total === 1 ? "annuncio" : "annunci"}`
+              : "☰ Vedi elenco"
+            : "🗺 Vedi mappa"}
         </button>
       )}
     </div>
@@ -1386,6 +1663,7 @@ function ResultsHead({
   isRent,
   onRefine,
   onFlipAssumption,
+  area,
 }: {
   results: ResultsState | null;
   query: string;
@@ -1394,6 +1672,8 @@ function ResultsHead({
   isRent: boolean;
   onRefine: (phrase: string, meta: RefineMeta) => void;
   onFlipAssumption: (to: "alquilar" | "comprar") => void;
+  /** Modo área: el contador es el del rectángulo y el lugar de la consulta no se muestra. */
+  area: AreaState | null;
 }) {
   if (!results) {
     return (
@@ -1420,11 +1700,22 @@ function ResultsHead({
   return (
     <div className="results-head">
       {/* Contador = total_matches (total real en DB), nunca `total`. */}
-      <h1 className="results-count" data-testid="results-count">
-        {fmtInt(results.totalMatches)} {results.totalMatches === 1 ? "risultato" : "risultati"}
+      <h1 className="results-count" data-testid="results-count" data-area={area ? "" : undefined} aria-busy={area?.loading || undefined}>
+        {area
+          ? `${fmtInt(area.total)} ${area.total === 1 ? "annuncio" : "annunci"} in quest'area`
+          : `${fmtInt(results.totalMatches)} ${results.totalMatches === 1 ? "risultato" : "risultati"}`}
       </h1>
-      {query && <p className="results-query">per: «{query}»</p>}
-      {s && <InterpretationChips summary={s} disabled={searching} onRefine={onRefine} onFlipAssumption={onFlipAssumption} isRent={isRent} />}
+      {query && <p className="results-query">{area ? <>dalla ricerca «{query}», nell&apos;area della mappa</> : <>per: «{query}»</>}</p>}
+      {s && (
+        <InterpretationChips
+          summary={s}
+          disabled={searching}
+          onRefine={onRefine}
+          onFlipAssumption={onFlipAssumption}
+          isRent={isRent}
+          hideFields={area ? AREA_HIDDEN_CHIPS : undefined}
+        />
+      )}
     </div>
   );
 }
