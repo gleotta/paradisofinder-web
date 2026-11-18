@@ -47,6 +47,7 @@ import { BackLink, ContactActions, DetailTracker, Gallery, SimilarsSection, Sour
 import { isCardOrigin, isSearchId } from "@/lib/tracking-ids";
 import { isVerticalId } from "@/lib/vertical";
 import { siteUrl } from "@/lib/server/contact";
+import { MARKET_CONFIG, SITE_OG_IMAGE } from "@/lib/market";
 import { propertyOgImageUrl, propertyShareUrl } from "@/lib/share";
 
 /**
@@ -113,15 +114,20 @@ export async function generateMetadata({
       description,
       url,
       type: "website",
-      locale: "es_AR",
-      siteName: "paradisofinder.com",
-      ...(photo ? { images: [{ url: photo, width: 1200, height: 630, alt: `${type} a ${zone}` }] } : {}),
+      locale: MARKET_CONFIG.ogLocale,
+      siteName: MARKET_CONFIG.siteName,
+      // Sin foto, la imagen del sitio (definir `openGraph` acá pisa la del layout).
+      images: [
+        photo
+          ? { url: photo, width: 1200, height: 630, alt: `${type} a ${zone}` }
+          : { url: SITE_OG_IMAGE, width: 1200, height: 630, alt: "finder Italia" },
+      ],
     },
     twitter: {
-      card: photo ? "summary_large_image" : "summary",
+      card: "summary_large_image",
       title: `${title} — finder Italia`,
       description,
-      ...(photo ? { images: [photo] } : {}),
+      images: [photo ?? SITE_OG_IMAGE],
     },
   };
 }

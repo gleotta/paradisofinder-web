@@ -87,3 +87,8 @@ export function searchHref(params: URLSearchParams | string): string {
   const qs = typeof params === "string" ? params : params.toString();
   return qs ? `${MARKET_CONFIG.routes.search}?${qs}` : MARKET_CONFIG.routes.search;
 }
+
+/** og:image del sitio de italia (1200x630): `public/og-italia.png`, la genera
+ *  `npm run icons` desde `scripts/og-italia.svg`. La hereda toda página que no
+ *  ponga la suya; la ficha usa la foto del aviso y cae en esta si no hay. */
+export const SITE_OG_IMAGE = "/og-italia.png";

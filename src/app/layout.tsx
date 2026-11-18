@@ -6,7 +6,7 @@ import "leaflet.markercluster/dist/MarkerCluster.css";
 import "./globals.css";
 import "./italia.css";
 import localFont from "next/font/local";
-import { IS_ITALIA, MARKET, MARKET_CONFIG } from "@/lib/market";
+import { IS_ITALIA, MARKET, MARKET_CONFIG, SITE_OG_IMAGE } from "@/lib/market";
 import { ItaliaFooter, ItaliaHeader } from "@/markets/italia/Chrome";
 import { ContactConfigProvider } from "@/components/ContactConfig";
 import PublishCta from "@/components/PublishCta";
@@ -17,6 +17,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   // El dock fijo respeta env(safe-area-inset-bottom) en iPhone.
   viewportFit: "cover",
+  // Color de la barra del navegador en el teléfono: el de la cabecera.
+  ...(IS_ITALIA ? { themeColor: "#0B2545" } : {}),
 };
 
 const SITE = siteUrl();
@@ -35,8 +37,15 @@ const METADATA_ITALIA: Metadata = {
   },
   description:
     "Scrivi la casa che cerchi con parole tue: finder trova gli immobili in vendita e in affitto e ti dice come si colloca il prezzo rispetto alla zona.",
-  openGraph: { siteName: MARKET_CONFIG.siteName, locale: MARKET_CONFIG.ogLocale, type: "website" },
-  twitter: { card: "summary_large_image" },
+  // og:image del sitio (`public/og-italia.png`, la genera `npm run icons`). La
+  // ficha pone la suya (la foto del aviso); el resto de las páginas hereda esta.
+  openGraph: {
+    siteName: MARKET_CONFIG.siteName,
+    locale: MARKET_CONFIG.ogLocale,
+    type: "website",
+    images: [{ url: SITE_OG_IMAGE, width: 1200, height: 630, alt: "finder Italia — case in vendita e in affitto" }],
+  },
+  twitter: { card: "summary_large_image", images: [SITE_OG_IMAGE] },
   // demo: fuera de los buscadores
   robots: { index: false, follow: false },
 };

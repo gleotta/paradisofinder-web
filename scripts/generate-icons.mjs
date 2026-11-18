@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /**
- * Íconos de marca (15/09) a partir de UNA fuente vectorial, `src/app/icon.svg`
- * (cuadrado violeta redondeado + "f" blanca + punto magenta, en `<g id="glyph">`):
+ * Íconos de marca (15/09) a partir de UNA fuente vectorial, `src/app/icon.svg`.
+ * En la rama italia (18/11) es el de finder Italia: cuadrado azul marino
+ * redondeado + "f" blanca del logotipo + el cuadrado rojo de la marca, en
+ * `<g id="glyph">`:
  *
  *   src/app/favicon.ico                  16 + 32 + 48 px (entradas PNG dentro del ICO)
  *   src/app/apple-icon.png               180 px, fondo lleno sin transparencia, letra con margen
@@ -9,6 +11,8 @@
  *   public/icons/icon-512.png            ídem
  *   public/icons/icon-maskable-512.png   manifest, purpose "maskable" (fondo lleno,
  *                                        letra dentro de la zona segura del 80 %)
+ *   public/og-italia.png                 og:image del sitio (1200x630), desde
+ *                                        `scripts/og-italia.svg` (textos en paths)
  *
  *   npm run icons
  *
@@ -29,8 +33,8 @@ const source = readFileSync(path.join(root, "src/app/icon.svg"), "utf8");
 
 const VIEWBOX = 64;
 // Fondo lleno (apple-icon, maskable): la letra al 80 % queda con margen propio
-// y su punto más lejano del centro (el borde del punto magenta) a ~23 unidades,
-// dentro del radio seguro de maskable (40 % de 64 = 25,6).
+// y sus puntos más lejanos del centro (la esquina de la "f" y la del cuadrado
+// rojo) a ~20,5 unidades, dentro del radio seguro de maskable (40 % de 64 = 25,6).
 const FULL_BLEED_SCALE = 0.8;
 
 const glyph = source.match(/<g id="glyph">[\s\S]*?<\/g>/)?.[0];
@@ -84,6 +88,13 @@ const outputs = [
   { file: "public/icons/icon-192.png", data: await render(source, 192) },
   { file: "public/icons/icon-512.png", data: await render(source, 512) },
   { file: "public/icons/icon-maskable-512.png", data: await render(fullBleedSvg, 512, { opaque: true }) },
+  {
+    file: "public/og-italia.png",
+    data: await sharp(readFileSync(path.join(here, "og-italia.svg")))
+      .resize(1200, 630)
+      .png({ compressionLevel: 9, palette: true })
+      .toBuffer(),
+  },
 ];
 
 for (const { file, data } of outputs) {
